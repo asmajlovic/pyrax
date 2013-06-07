@@ -20,30 +20,14 @@
 OpenStack Client interface. Handles the REST calls and responses.
 """
 
+import httplib2
+import json
 import logging
 import os
-import time
-import urlparse
-
-import httplib2
 import pkg_resources
-
-try:
-    import json
-except ImportError:
-    import simplejson as json
-
-try:
-    import keyring
-    has_keyring = True
-except ImportError:
-    keyring = None
-    has_keyring = False
-
-# Python 2.5 compat fix
-if not hasattr(urlparse, "parse_qsl"):
-    import cgi
-    urlparse.parse_qsl = cgi.parse_qsl
+import time
+from urllib import quote
+import urlparse
 
 from manager import BaseManager
 from resource import BaseResource
@@ -59,6 +43,8 @@ class BaseClient(httplib2.Http):
     """
     # This will get set by pyrax when the service is started.
     user_agent = None
+    # Each client subclass should set their own name.
+    name = "base"
 
     def __init__(self, region_name=None, endpoint_type="publicURL",
             management_url=None, service_type=None, service_name=None,
@@ -161,7 +147,7 @@ class BaseClient(httplib2.Http):
 
         string_parts = ["curl -i"]
         for element in args:
-            if element in ("GET", "POST"):
+            if element in ("GET", "POST", "PUT", "DELETE", "HEAD"):
                 string_parts.append(" -X %s" % element)
             else:
                 string_parts.append(" %s" % element)
@@ -182,7 +168,7 @@ class BaseClient(httplib2.Http):
         """
         if not self.http_log_debug:
             return
-        self._logger.debug("RESP:%s %s\n", resp, body)
+        self._logger.debug("RESP: %s %s\n", resp, body)
 
 
     def request(self, *args, **kwargs):
@@ -231,6 +217,11 @@ class BaseClient(httplib2.Http):
         if not all((self.management_url, id_svc.token, id_svc.tenant_id)):
             id_svc.authenticate()
 
+        if not self.management_url:
+            # We've authenticated but no management_url has been set. This
+            # indicates that the service is not available.
+            raise exc.ServiceNotAvailable("The '%s' service is not available."
+                    % self)
         # Perform the request once. If we get a 401 back then it
         # might be because the auth token expired, so try to
         # re-authenticate and try again. If it still fails, bail.
@@ -238,9 +229,8 @@ class BaseClient(httplib2.Http):
             kwargs.setdefault("headers", {})["X-Auth-Token"] = id_svc.token
             if id_svc.tenant_id:
                 kwargs["headers"]["X-Auth-Project-Id"] = id_svc.tenant_id
-
-            resp, body = self._time_request(self.management_url + uri, method,
-                    **kwargs)
+            resp, body = self._time_request(self.management_url +
+                    quote(uri), method, **kwargs)
             return resp, body
         except exc.Unauthorized as ex:
             try:

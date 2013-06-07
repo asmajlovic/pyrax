@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 import ConfigParser
 
 from pyrax.base_identity import BaseAuth
@@ -15,21 +16,10 @@ class RaxIdentity(BaseAuth):
     """
     us_auth_endpoint = "https://identity.api.rackspacecloud.com/v2.0/"
     uk_auth_endpoint = "https://lon.identity.api.rackspacecloud.com/v2.0/"
-    password = ""
-    credential_file_section = "rackspace_cloud"
-
-
-    def __init__(self, username=None, password=None, token=None,
-            credential_file=None, region=None):
-        self.username = username
-        self.password = password
-        self.token = token
-        self._creds_file = credential_file
-        self._region = region
 
 
     def _get_auth_endpoint(self):
-        if self._region and self._region.upper() in ("LON", ):
+        if self.region and self.region.upper() in ("LON", ):
             return self.uk_auth_endpoint
         return self.us_auth_endpoint
 
@@ -38,7 +28,8 @@ class RaxIdentity(BaseAuth):
         self.username = cfg.get("rackspace_cloud", "username")
         try:
             self.password = cfg.get("rackspace_cloud", "api_key")
-        except ConfigParser.NoOptionError:
+        except ConfigParser.NoOptionError as e:
+            # Allow either the use of either 'api_key' or 'password'.
             self.password = cfg.get("rackspace_cloud", "password")
 
 

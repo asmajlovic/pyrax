@@ -98,6 +98,9 @@ class KeyringPasswordNotFound(PyraxException):
 class KeyringUsernameMissing(PyraxException):
     pass
 
+class IdentityClassNotDefined(PyraxException):
+    pass
+
 class InvalidCDNMetadata(PyraxException):
     pass
 
@@ -212,6 +215,9 @@ class NotCDNEnabled(PyraxException):
 class NoTokenLookupException(PyraxException):
     pass
 
+class PasswordChangeFailed(PyraxException):
+    pass
+
 class ProtocolMismatch(PyraxException):
     pass
 
@@ -222,6 +228,9 @@ class PTRRecordDeletionFailed(PyraxException):
     pass
 
 class PTRRecordUpdateFailed(PyraxException):
+    pass
+
+class ServiceNotAvailable(PyraxException):
     pass
 
 class SnapshotNotAvailable(PyraxException):

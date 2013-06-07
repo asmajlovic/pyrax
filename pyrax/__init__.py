@@ -111,13 +111,44 @@ USER_AGENT = "pyrax/%s" % version.version
 # Do we output HTTP traffic for debugging?
 _http_debug = False
 
+# Regions and services available from the service catalog
+regions = tuple()
+services = tuple()
+
+
+def _id_type(ityp):
+    """Allow for shorthand names for the most common types."""
+    if ityp.lower() == "rackspace":
+        ityp = "rax_identity.RaxIdentity"
+    elif ityp.lower() == "keystone":
+        ityp = "keystone_identity.KeystoneIdentity"
+    return ityp
+
+
+def _import_identity(import_str):
+    import_str = _id_type(import_str)
+    full_str = "pyrax.identity.%s" % import_str
+    return utils.import_class(full_str)
+
+
 
 class Settings(object):
     """
     Holds and manages the settings for pyrax.
     """
     _environment = None
-    _settings = {}
+    env_dct = {
+            "identity_type": "CLOUD_ID_TYPE",
+            "auth_endpoint": "CLOUD_AUTH_ENDPOINT",
+            "keyring_username": "CLOUD_KEYRING_USER",
+            "region": "CLOUD_REGION",
+            "tenant_id": "CLOUD_TENANT_ID",
+            "tenant_name": "CLOUD_TENANT_NAME",
+            "encoding": "CLOUD_ENCODING",
+            "custom_user_agent": "CLOUD_USER_AGENT",
+            "debug": "CLOUD_DEBUG",
+            }
+    _settings = {"default": dict.fromkeys(env_dct.keys())}
 
 
     def get(self, key, env=None):
@@ -131,7 +162,19 @@ class Settings(object):
         try:
             return self._settings[env][key]
         except KeyError:
-            return None
+            # See if it's set in the environment
+            if key == "identity_class":
+                # This is defined via the identity_type
+                env_var = self.env_dct.get("identity_type")
+                ityp = os.environ.get(env_var)
+                if ityp:
+                    return _import_identity(ityp)
+            else:
+                env_var = self.env_dct.get(key)
+            try:
+                return os.environ[env_var]
+            except KeyError:
+                return None
 
 
     def set(self, key, val, env=None):
@@ -145,12 +188,24 @@ class Settings(object):
             env = self.environment
         else:
             if env not in self._settings:
-                raise EnvironmentNotFound("There is no environment named '%s'."
-                        % env)
+                raise exc.EnvironmentNotFound("There is no environment named "
+                "'%s'." % env)
         dct = self._settings[env]
         if key not in dct:
             raise exc.InvalidSetting("The setting '%s' is not defined." % key)
         dct[key] = val
+        if key == "identity_type":
+            # If setting the identity_type, also change the identity_class.
+            dct["identity_class"] = _import_identity(val)
+        elif key == "region":
+            if not identity:
+                return
+            current = identity.region
+            if current == val:
+                return
+            if "LON" in (current, val):
+                # This is an outlier, as it has a separate auth
+                identity.region = val
 
 
     def _getEnvironment(self):
@@ -162,15 +217,17 @@ class Settings(object):
                     "defined." % val)
         if val != self.environment:
             self._environment = val
-            if identity:
-                authenticate(connect=True)
+            clear_credentials()
+            _create_identity()
 
     environment = property(_getEnvironment, _setEnvironment, None,
             """Users can define several environments for use with pyrax. This
             holds the name of the current environment they are working in.
-            Changing this value will result in authenticating against the new
-            endpoint with the new creds, and will re-define the internal
-            services for pyrax, such as pyrax.cloudservers, etc.""")
+            Changing this value will discard any existing authentication
+            credentials, and will set all the individual clients for cloud
+            services, such as `pyrax.cloudservers`, to None. You must
+            authenticate against the new environment with the credentials
+            appropriate for that cloud provider.""")
 
 
     @property
@@ -196,25 +253,16 @@ class Settings(object):
             except (ConfigParser.NoSectionError, ConfigParser.NoOptionError):
                 return default
 
-        def import_identity(import_str):
-            full_str = "pyrax.identity.%s" % import_str
-            return utils.import_class(full_str)
-
         for section in cfg.sections():
             if section == "settings":
                 section_name = "default"
             else:
                 section_name = section
             dct = self._settings[section_name] = {}
-            dct["default_region"] = safe_get(section, "region", default_region)
+            dct["region"] = safe_get(section, "region", default_region)
             ityp = safe_get(section, "identity_type", default_identity_type)
-            # Allow for shorthand names for the most common types.
-            if ityp.lower() == "rackspace":
-                ityp = "rax_identity.RaxIdentity"
-            elif ityp.lower() == "keystone":
-                ityp = "keystone_identity.KeystoneIdentity"
-            dct["identity_type"] = ityp
-            dct["identity_class"] = import_identity(ityp)
+            dct["identity_type"] = _id_type(ityp)
+            dct["identity_class"] = _import_identity(ityp)
             # Handle both the old and new names for this setting.
             debug = safe_get(section, "debug")
             if debug is None:
@@ -272,7 +320,7 @@ def set_setting(key, val, env=None):
     Changes the value of the specified key in the current environment, or in
     another environment if specified.
     """
-    return settings.get(key, val, env=env)
+    return settings.set(key, val, env=env)
 
 
 def set_default_region(region):
@@ -281,13 +329,24 @@ def set_default_region(region):
     default_region = region
 
 
+def _create_identity():
+    """
+    Creates an instance of the current identity_class and assigns it to the
+    module-level name 'identity'.
+    """
+    global identity
+    cls = settings.get("identity_class")
+    if not cls:
+        raise exc.IdentityClassNotDefined("No identity class has "
+                "been defined for the current environment.")
+    identity = cls()
+
+
 def _assure_identity(fnc):
     """Ensures that the 'identity' attribute is not None."""
     def _wrapped(*args, **kwargs):
-        global identity
         if identity is None:
-            cls = settings.get("identity_class")
-            identity = cls()
+            _create_identity()
         return fnc(*args, **kwargs)
     return _wrapped
 
@@ -307,7 +366,7 @@ def _require_auth(fnc):
 @_assure_identity
 def _safe_region(region=None):
     """Value to use when no region is specified."""
-    return region or settings.get("default_region") or default_region
+    return region or settings.get("region") or default_region
 
 
 @_assure_identity
@@ -320,6 +379,7 @@ def set_credentials(username, api_key=None, password=None, region=None,
     for that region, and set the default region for connections.
     """
     pw_key = password or api_key
+    region = _safe_region(region)
     identity.set_credentials(username=username, password=pw_key,
             tenant_id=settings.get("tenant_id"), region=region)
     if authenticate:
@@ -347,6 +407,7 @@ def set_credential_file(cred_file, region=None, authenticate=True):
     If the region is passed, it will authenticate against the proper endpoint
     for that region, and set the default region for connections.
     """
+    region = _safe_region(region)
     identity.set_credential_file(cred_file, region=region)
     if authenticate:
         _auth_and_connect(region=region)
@@ -419,9 +480,12 @@ def authenticate(connect=True):
 
 def clear_credentials():
     """De-authenticate by clearing all the names back to None."""
-    global identity, cloudservers, cloudfiles, cloud_loadbalancers
-    global cloud_databases, cloud_blockstorage, cloud_dns, cloud_networks
+    global identity, regions, services, cloudservers, cloudfiles
+    global cloud_loadbalancers, cloud_databases, cloud_blockstorage, cloud_dns
+    global cloud_networks
     identity = None
+    regions = tuple()
+    services = tuple()
     cloudservers = None
     cloudfiles = None
     cloud_loadbalancers = None

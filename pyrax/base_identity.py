@@ -54,9 +54,8 @@ class BaseAuth(object):
     tenant_id = ""
     tenant_name = ""
     authenticated = False
-    services = {}
-    http_log_debug = False
     user_agent = "pyrax"
+    http_log_debug = False
 
 
     def __init__(self, username=None, password=None, token=None,
@@ -64,8 +63,11 @@ class BaseAuth(object):
         self.username = username
         self.password = password
         self.token = token
+        self.region = region
         self._creds_file = credential_file
-        self._region = region
+        self._timeout = timeout
+        self.services = {}
+        self.regions = set()
 
 
     @property
@@ -93,7 +95,7 @@ class BaseAuth(object):
         self.password = password
         self.tenant_id = tenant_id
         if region:
-            self._region = region
+            self.region = region
         if authenticate:
             self.authenticate()
 
@@ -126,7 +128,7 @@ class BaseAuth(object):
         except (ConfigParser.NoSectionError, ConfigParser.NoOptionError) as e:
             raise exc.InvalidCredentialFile(e)
         if region:
-            self._region = region
+            self.region = region
         if authenticate:
             self.authenticate()
 
@@ -249,12 +251,16 @@ class BaseAuth(object):
             svc_ep = self.services[typ]["endpoints"]
             for ep in svc["endpoints"]:
                 rgn = ep.get("region", "ALL")
+                self.regions.add(rgn)
                 svc_ep[rgn] = {}
                 svc_ep[rgn]["public_url"] = ep["publicURL"]
                 try:
                     svc_ep[rgn]["internal_url"] = ep["internalURL"]
                 except KeyError:
                     pass
+        self.regions.discard("ALL")
+        pyrax.regions = tuple(self.regions)
+        pyrax.services = tuple(self.services.keys())
         user = access["user"]
         self.user = {}
         self.user["id"] = user["id"]

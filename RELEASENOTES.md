@@ -1,5 +1,44 @@
 # Release Notes for pyrax
 
+###2013.06.05 - Version 1.4.5
+- Fixed a bug that prevented region from being properly set. Issue #86.
+
+###2013.06.04 - Version 1.4.4
+- Fixed a bug when using environment variables to set the identity_type. Issue #82.
+
+###2013.06.03 - Version 1.4.3
+- Added support for having objects automatically deleted from Cloud Files after
+    a period of time.
+
+###2013.05.30 - Version 1.4.2
+- Fixed several bugs related to the identity and config file changes.
+
+###2013.05.30 - Version 1.4.1
+- Added support for new Cloud Database user APIs.
+- Fixed a bug in which an exception class was not defined (#77)
+
+###2013.05.29 - Version 1.4.0
+- Added support for **all** OpenStack clouds. Previous versions only supported
+    Rackspace authentication methods.
+- Configuration files now support multiple cloud environments in the same file.
+    You can switch between environments by calling `pyrax.set_environment("env")`,
+    where `env` is the name of the desired environment.
+- Configuration settings can now be stored in environment variables. These all
+    begin with `CLOUD_`; a full list can be found in the [main pyrax
+    documentation](https://github.com/rackspace/pyrax/tree/master/docs/pyrax_doc.md).
+- Available regions are now available in the `pyrax.regions` attribute after
+    authentication.
+- Services that are available for the current cloud provider are now available
+    in the `pyrax.services` attribute.
+- Fixed an issue in Cloud Databases in which the `volume` attribute was
+    sometimes a dict and sometimes an instance of `CloudDatabaseVolume`. Now it
+    will always be an instance.
+- Added a smoke test script to the integrated tests. It currently covers the
+    compute, networking, database, and object_store services.
+- Removed unnecessary hack for compute URIs.
+- Cleaned up some naming and formatting inconsistencies.
+
+
 ###2013.05.10 - Version 1.3.9
 - This fixes two issues: #63 and #67. The first fixes an incorrect path in the
     cloudfiles get_temp_url() function; the second adds the ability to specify

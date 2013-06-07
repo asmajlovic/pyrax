@@ -18,6 +18,7 @@
 #    under the License.
 
 from functools import wraps
+
 from pyrax.client import BaseClient
 import pyrax.exceptions as exc
 from pyrax.manager import BaseManager
@@ -56,18 +57,126 @@ class CloudDatabaseVolume(object):
 
 
 
+class CloudDatabaseManager(BaseManager):
+    """
+    This class manages communication with Cloud Database resources.
+    """
+    def get(self, item):
+        """
+        This additional code is necessary to properly return the 'volume'
+        attribute of the instance as a CloudDatabaseVolume object instead of
+        a raw dict.
+        """
+        resource = super(CloudDatabaseManager, self).get(item)
+        resource.volume = CloudDatabaseVolume(resource, resource.volume)
+        return resource
+
+
+class CloudDatabaseUserManager(BaseManager):
+    """
+    This class handles operations on the users in a Cloud Database.
+    """
+    def _get_db_names(self, dbs, strict=True):
+        """
+        Accepts a single db (name or object) or a list of dbs, and returns a
+        list of database names. If any of the supplied dbs do not exist, a
+        NoSuchDatabase exception will be raised, unless you pass strict=False.
+        """
+        dbs = utils.coerce_string_to_list(dbs)
+        db_names = [utils.get_name(db) for db in dbs]
+        if strict:
+            good_dbs = self.instance.list_databases()
+            good_names = [utils.get_name(good_db) for good_db in good_dbs]
+            bad_names = [db_name for db_name in db_names
+                    if db_name not in good_names]
+            if bad_names:
+                bad = ", ".join(bad_names)
+                raise exc.NoSuchDatabase("The following database(s) were not "
+                        "found: %s" % bad)
+        return db_names
+
+
+    def change_user_password(self, user, new_pass):
+        """
+        Changes the password for the user to the supplied value.
+
+        Returns None upon success; raises PasswordChangeFailed if the call
+        does not complete successfully.
+        """
+        user = utils.get_name(user)
+        body = {"users": [{"name": user, "password": new_pass}]}
+        uri = "/%s" % self.uri_base
+        resp, resp_body = self.api.method_put(uri, body=body)
+        if resp.status > 299:
+            raise exc.PasswordChangeFailed("Password for '%s' was not changed"
+                    % user)
+        return None
+
+
+    def list_user_access(self, user):
+        """
+        Returns a list of all database names for which the specified user
+        has access rights.
+        """
+        user = utils.get_name(user)
+        uri = "/%s/%s/databases" % (self.uri_base, user)
+        try:
+            resp, resp_body = self.api.method_get(uri)
+        except exc.NotFound as e:
+            raise exc.NoSuchDatabaseUser("User '%s' does not exist." % user)
+        dbs = resp_body.get("databases", {})
+        return [CloudDatabaseDatabase(self, db) for db in dbs]
+
+
+    def grant_user_access(self, user, db_names, strict=True):
+        """
+        Gives access to the databases listed in `db_names` to the user. You may
+        pass in either a single db or a list of dbs.
+
+        If any of the databases do not exist, a NoSuchDatabase exception will
+        be raised, unless you specify `strict=False` in the call.
+        """
+        user = utils.get_name(user)
+        uri = "/%s/%s/databases" % (self.uri_base, user)
+        db_names = self._get_db_names(db_names, strict=strict)
+        dbs = [{"name": db_name} for db_name in db_names]
+        body = {"databases": dbs}
+        try:
+            resp, resp_body = self.api.method_put(uri, body=body)
+        except exc.NotFound as e:
+            raise exc.NoSuchDatabaseUser("User '%s' does not exist." % user)
+
+
+    def revoke_user_access(self, user, db_names, strict=True):
+        """
+        Revokes access to the databases listed in `db_names` for the user.
+
+        If any of the databases do not exist, a NoSuchDatabase exception will
+        be raised, unless you specify `strict=False` in the call.
+        """
+        user = utils.get_name(user)
+        db_names = self._get_db_names(db_names, strict=strict)
+        bad_names = []
+        for db_name in db_names:
+            uri = "/%s/%s/databases/%s" % (self.uri_base, user, db_name)
+            resp, resp_body = self.api.method_delete(uri)
+
+
+
 class CloudDatabaseInstance(BaseResource):
     """
     This class represents a MySQL instance in the cloud.
     """
     def __init__(self, *args, **kwargs):
         super(CloudDatabaseInstance, self).__init__(*args, **kwargs)
-        self._database_manager = BaseManager(self.manager.api,
+        self._database_manager = CloudDatabaseManager(self.manager.api,
                 resource_class=CloudDatabaseDatabase, response_key="database",
                 uri_base="instances/%s/databases" % self.id)
-        self._user_manager = BaseManager(self.manager.api,
+        self._user_manager = CloudDatabaseUserManager(self.manager.api,
                 resource_class=CloudDatabaseUser, response_key="user",
                 uri_base="instances/%s/users" % self.id)
+        # Add references to the parent instance to the managers.
+        self._database_manager.instance = self._user_manager.instance = self
         # Remove the lazy load
         if not self.loaded:
             self.get()
@@ -93,6 +202,19 @@ class CloudDatabaseInstance(BaseResource):
         return self._user_manager.list()
 
 
+    def get_user(self, name):
+        """
+        Finds the user in this instance with the specified name, and
+        returns a CloudDatabaseUser object. If no match is found, a
+        NoSuchDatabaseUser exception is raised.
+        """
+        try:
+            return self._user_manager.get(name)
+        except exc.NotFound:
+            raise exc.NoSuchDatabaseUser("No user by the name '%s' exists." %
+                    name)
+
+
     def get_database(self, name):
         """
         Finds the database in this instance with the specified name, and
@@ -104,20 +226,6 @@ class CloudDatabaseInstance(BaseResource):
                     if db.name == name][0]
         except IndexError:
             raise exc.NoSuchDatabase("No database by the name '%s' exists." %
-                    name)
-
-
-    def get_user(self, name):
-        """
-        Finds the user in this instance with the specified name, and
-        returns a CloudDatabaseUser object. If no match is found, a
-        NoSuchDatabaseUser exception is raised.
-        """
-        try:
-            return [user for user in self.list_users()
-                    if user.name == name][0]
-        except IndexError:
-            raise exc.NoSuchDatabaseUser("No user by the name '%s' exists." %
                     name)
 
 
@@ -165,38 +273,57 @@ class CloudDatabaseInstance(BaseResource):
         return self._user_manager.find(name=name)
 
 
-    def _get_name(self, name_or_obj):
-        """
-        For convenience, many methods accept either an object or the name
-        of the object as a parameter, but need the name to send to the
-        API. This method handles that conversion.
-        """
-        if isinstance(name_or_obj, basestring):
-            return name_or_obj
-        try:
-            return name_or_obj.name
-        except AttributeError:
-            msg = "The object '%s' does not have a 'name' attribute." % name_or_obj
-            raise exc.MissingName(msg)
-
-
     def delete_database(self, name_or_obj):
         """
         Deletes the specified database. If no database by that name
         exists, no exception will be raised; instead, nothing at all
         is done.
         """
-        name = self._get_name(name_or_obj)
+        name = utils.get_name(name_or_obj)
         self._database_manager.delete(name)
 
 
-    def delete_user(self, name_or_obj):
+    def change_user_password(self, user, new_pass):
+        """
+        Changes the password for the user to the supplied value.
+
+        Returns None upon success; raises PasswordChangeFailed if the call
+        does not complete successfully.
+        """
+        return self._user_manager.change_user_password(user, new_pass)
+
+
+    def list_user_access(self, user):
+        """
+        Returns a list of all database names for which the specified user
+        has access rights.
+        """
+        return self._user_manager.list_user_access(user)
+
+
+    def grant_user_access(self, user, db_names, strict=True):
+        """
+        Gives access to the databases listed in `db_names` to the user.
+        """
+        return self._user_manager.grant_user_access(user, db_names,
+                strict=strict)
+
+
+    def revoke_user_access(self, user, db_names, strict=True):
+        """
+        Revokes access to the databases listed in `db_names` for the user.
+        """
+        return self._user_manager.revoke_user_access(user, db_names,
+                strict=strict)
+
+
+    def delete_user(self, user):
         """
         Deletes the specified user. If no user by that name
         exists, no exception will be raised; instead, nothing at all
         is done.
         """
-        name = self._get_name(name_or_obj)
+        name = utils.get_name(user)
         self._user_manager.delete(name)
 
 
@@ -288,6 +415,39 @@ class CloudDatabaseUser(BaseResource):
         self.manager.delete(self.name)
 
 
+    def change_password(self, new_pass):
+        """
+        Changes the password for this user to the supplied value.
+
+        Returns None upon success; raises PasswordChangeFailed if the call
+        does not complete successfully.
+        """
+        self.manager.change_user_password(self, new_pass)
+
+
+    def list_user_access(self):
+        """
+        Returns a list of all database names for which the specified user
+        has access rights.
+        """
+        return self.manager.list_user_access(self)
+
+
+    def grant_user_access(self, db_names, strict=True):
+        """
+        Gives access to the databases listed in `db_names` to the user.
+        """
+        return self.manager.grant_user_access(self, db_names, strict=strict)
+
+
+    def revoke_user_access(self, db_names, strict=True):
+        """
+        Revokes access to the databases listed in `db_names` for the user.
+        """
+        return self.manager.revoke_user_access(self, db_names, strict=strict)
+
+
+
 class CloudDatabaseFlavor(BaseResource):
     """
     This class represents the available instance configurations, or 'flavors',
@@ -298,17 +458,21 @@ class CloudDatabaseFlavor(BaseResource):
     _non_display = ["links"]
 
 
+
 class CloudDatabaseClient(BaseClient):
     """
     This is the primary class for interacting with Cloud Databases.
     """
+    name = "Cloud Databases"
+
     def _configure_manager(self):
         """
         Creates a manager to handle the instances, and another
         to handle flavors.
         """
-        self._manager = BaseManager(self, resource_class=CloudDatabaseInstance,
-                response_key="instance", uri_base="instances")
+        self._manager = CloudDatabaseManager(self,
+                resource_class=CloudDatabaseInstance, response_key="instance",
+                uri_base="instances")
         self._flavor_manager = BaseManager(self,
                 resource_class=CloudDatabaseFlavor, response_key="flavor",
                 uri_base="flavors")
@@ -374,6 +538,45 @@ class CloudDatabaseClient(BaseClient):
     def delete_user(self, instance, name):
         """Deletes the user by name on the given instance."""
         return instance.delete_user(name)
+
+
+    @assure_instance
+    def change_user_password(self, instance, user, new_pass):
+        """
+        Changes the password for the user of the specified instance to the
+        supplied value.
+
+        Returns None upon success; raises PasswordChangeFailed if the call
+        does not complete successfully.
+        """
+        return instance.change_user_password(user, new_pass)
+
+
+    @assure_instance
+    def list_user_access(self, instance, user):
+        """
+        Returns a list of all database names for which the specified user
+        has access rights on the specified instance.
+        """
+        return instance.list_user_access(user)
+
+
+    @assure_instance
+    def grant_user_access(self, instance, user, db_names, strict=True):
+        """
+        Gives access to the databases listed in `db_names` to the user
+        on the specified instance.
+        """
+        return instance.grant_user_access(user, db_names, strict=strict)
+
+
+    @assure_instance
+    def revoke_user_access(self, instance, user, db_names, strict=True):
+        """
+        Revokes access to the databases listed in `db_names` for the user
+        on the specified instance.
+        """
+        return instance.revoke_user_access(user, db_names, strict=strict)
 
 
     @assure_instance

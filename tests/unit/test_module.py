@@ -33,7 +33,7 @@ class PyraxInitTest(unittest.TestCase):
         pyrax.settings._settings = {
                 "default": {
                     "auth_endpoint": None,
-                    "default_region": "DFW",
+                    "region": "DFW",
                     "encoding": "utf-8",
                     "http_debug": False,
                     "identity_class": pyrax.rax_identity.RaxIdentity,
@@ -45,7 +45,7 @@ class PyraxInitTest(unittest.TestCase):
                 },
                 "alternate": {
                     "auth_endpoint": None,
-                    "default_region": "NOWHERE",
+                    "region": "NOWHERE",
                     "encoding": "utf-8",
                     "http_debug": False,
                     "identity_class": pyrax.keystone_identity.KeystoneIdentity,
@@ -90,7 +90,7 @@ class PyraxInitTest(unittest.TestCase):
         with utils.SelfDeletingTempfile() as cfgfile:
             open(cfgfile, "w").write(dummy_cfg)
             pyrax.settings.read_config(cfgfile)
-        self.assertEqual(pyrax.get_setting("default_region"), "FAKE")
+        self.assertEqual(pyrax.get_setting("region"), "FAKE")
         self.assertTrue(pyrax.get_setting("user_agent").startswith("FAKE "))
         pyrax.default_region = sav_region
         pyrax.USER_AGENT = sav_USER_AGENT
@@ -210,6 +210,24 @@ class PyraxInitTest(unittest.TestCase):
         pyrax.set_default_region(new_region)
         self.assertEqual(pyrax.default_region, new_region)
 
+    def test_set_identity_type_setting(self):
+        savtyp = pyrax.get_setting("identity_type")
+        savcls = pyrax.get_setting("identity_class")
+        pyrax.set_setting("identity_class", None)
+        pyrax.set_setting("identity_type", "keystone")
+        cls = pyrax.get_setting("identity_class")
+        self.assertEqual(cls, pyrax.keystone_identity.KeystoneIdentity)
+        pyrax.set_setting("identity_type", savtyp)
+        pyrax.set_setting("identity_class", savcls)
+
+    def test_set_region_setting(self):
+        ident = pyrax.identity
+        ident.region = "DFW"
+        pyrax.set_setting("region", "ORD")
+        self.assertEqual(ident.region, "DFW")
+        pyrax.set_setting("region", "LON")
+        self.assertEqual(ident.region, "LON")
+
     def test_make_agent_name(self):
         test_agent = "TEST"
         ret = pyrax._make_agent_name(test_agent)
@@ -227,9 +245,11 @@ class PyraxInitTest(unittest.TestCase):
     @patch('pyrax._cs_client.Client', new=fakes.FakeCSClient)
     def test_connect_to_cloudservers(self):
         pyrax.cloudservers = None
+        sav = pyrax.connect_to_cloudservers
         pyrax.connect_to_cloudservers = self.orig_connect_to_cloudservers
         pyrax.cloudservers = pyrax.connect_to_cloudservers()
         self.assertIsNotNone(pyrax.cloudservers)
+        pyrax.connect_to_cloudservers = sav
 
     @patch('pyrax._cf.CFClient', new=fakes.FakeService)
     def test_connect_to_cloudfiles(self):
@@ -254,11 +274,16 @@ class PyraxInitTest(unittest.TestCase):
         self.assertIsNotNone(pyrax.cloud_databases)
 
     def test_set_http_debug(self):
+        pyrax.cloudservers = None
+        sav = pyrax.connect_to_cloudservers
+        pyrax.connect_to_cloudservers = self.orig_connect_to_cloudservers
+        pyrax.cloudservers = pyrax.connect_to_cloudservers()
         pyrax.cloudservers.http_log_debug = False
         pyrax.set_http_debug(True)
         self.assertTrue(pyrax.cloudservers.http_log_debug)
         pyrax.set_http_debug(False)
         self.assertFalse(pyrax.cloudservers.http_log_debug)
+        pyrax.connect_to_cloudservers = sav
 
     def test_get_encoding(self):
         sav = pyrax.get_setting
