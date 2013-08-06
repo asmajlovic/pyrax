@@ -6,6 +6,8 @@ import json
 import os
 import random
 import requests
+import StringIO
+import sys
 import unittest
 import urllib2
 
@@ -56,25 +58,129 @@ class IdentityTest(unittest.TestCase):
             self.assertIsNone(ident.token)
             self.assertIsNone(ident._creds_file)
 
+    def test_auth_with_token_name(self):
+        for cls in self.id_classes.values():
+            ident = cls()
+            tok = utils.random_name()
+            nm = utils.random_name()
+            resp = fakes.FakeIdentityResponse()
+            # Need to stuff this into the standard response
+            sav = resp.content["access"]["user"]["name"]
+            resp.content["access"]["user"]["name"] = nm
+            ident.method_post = Mock(return_value=resp)
+            ident.auth_with_token(tok, tenant_name=nm)
+            ident.method_post.assert_called_once_with("tokens",
+                    headers={'Content-Type': 'application/json', 'Accept':
+                    'application/json'}, std_headers=False, data={'auth':
+                    {'token': {'id': tok}, 'tenantName': nm}})
+            self.assertEqual(ident.username, nm)
+            resp.content["access"]["user"]["name"] = sav
+
+    def test_auth_with_token_id(self):
+        for cls in self.id_classes.values():
+            ident = cls()
+            tok = utils.random_name()
+            tenant_id = utils.random_name()
+            resp = fakes.FakeIdentityResponse()
+            # Need to stuff this into the standard response
+            sav = resp.content["access"]["token"]["tenant"]["id"]
+            resp.content["access"]["token"]["tenant"]["id"] = tenant_id
+            ident.method_post = Mock(return_value=resp)
+            ident.auth_with_token(tok, tenant_id=tenant_id)
+            ident.method_post.assert_called_once_with("tokens",
+                    headers={'Content-Type': 'application/json', 'Accept':
+                    'application/json'}, std_headers=False, data={'auth':
+                    {'token': {'id': tok}, 'tenantId': tenant_id}})
+            self.assertEqual(ident.tenant_id, tenant_id)
+            resp.content["access"]["token"]["tenant"]["id"] = sav
+
+    def test_auth_with_token_id_auth_fail(self):
+        for cls in self.id_classes.values():
+            ident = cls()
+            tok = utils.random_name()
+            tenant_id = utils.random_name()
+            resp = fakes.FakeIdentityResponse()
+            resp.status_code = 401
+            ident.method_post = Mock(return_value=resp)
+            self.assertRaises(exc.AuthenticationFailed, ident.auth_with_token,
+                    tok, tenant_id=tenant_id)
+
+    def test_auth_with_token_id_auth_fail_general(self):
+        for cls in self.id_classes.values():
+            ident = cls()
+            tok = utils.random_name()
+            tenant_id = utils.random_name()
+            resp = fakes.FakeIdentityResponse()
+            resp.status_code = 499
+            resp.reason = "fake"
+            resp.json = Mock(return_value={"error": {"message": "fake"}})
+            ident.method_post = Mock(return_value=resp)
+            self.assertRaises(exc.AuthenticationFailed, ident.auth_with_token,
+                    tok, tenant_id=tenant_id)
+
+    def test_auth_with_token_missing(self):
+        for cls in self.id_classes.values():
+            ident = cls()
+            self.assertRaises(exc.MissingAuthSettings, ident.auth_with_token,
+                    utils.random_name())
+
+    def test_auth_with_token_rax(self):
+        ident = self.rax_identity_class()
+        mid = utils.random_name()
+        oid = utils.random_name()
+        token = utils.random_name()
+
+        class FakeResp(object):
+            info = None
+
+            def json(self):
+                return self.info
+
+        resp_main = FakeResp()
+        resp_main.info = {"access": {
+                "serviceCatalog": [{"a": "a", "name": "a", "type": "a"}],
+                "user": {"roles":
+                        [{"tenantId": oid, "name": "object-store:default"}],
+                }}}
+        resp_obj = FakeResp()
+        resp_obj.info = {"access": {
+                "serviceCatalog": [{"b": "b", "name": "b", "type": "b"}]}}
+        ident._call_token_auth = Mock(side_effect=(resp_main, resp_obj))
+
+        def fake_parse(dct):
+            svcs = dct.get("access", {}).get("serviceCatalog", {})
+            pyrax.services = [svc["name"] for svc in svcs]
+
+        ident._parse_response = fake_parse
+        ident.auth_with_token(token, tenant_id=mid)
+        ident._call_token_auth.assert_called_with(token, oid, None)
+        self.assertTrue("a" in pyrax.services)
+        self.assertTrue("b" in pyrax.services)
+
+
     def test_set_credentials(self):
         for cls in self.id_classes.values():
             ident = cls()
-            ident.set_credentials(self.username, self.password)
+            ident.authenticate = Mock()
+            ident.set_credentials(self.username, self.password,
+                    authenticate=True)
             self.assertEqual(ident.username, self.username)
             self.assertEqual(ident.password, self.password)
             self.assertIsNone(ident.token)
             self.assertIsNone(ident._creds_file)
+            ident.authenticate.assert_called_once_with()
 
     def test_set_credential_file(self):
         ident = self.rax_identity_class()
         user = "fakeuser"
         key = "fakeapikey"
+        ident.authenticate = Mock()
         with utils.SelfDeletingTempfile() as tmpname:
             with open(tmpname, "wb") as ff:
                 ff.write("[rackspace_cloud]\n")
                 ff.write("username = %s\n" % user)
                 ff.write("api_key = %s\n" % key)
-            ident.set_credential_file(tmpname)
+            ident.set_credential_file(tmpname, authenticate=True)
         self.assertEqual(ident.username, user)
         self.assertEqual(ident.password, key)
         # Using 'password' instead of 'api_key'
@@ -177,6 +283,15 @@ class IdentityTest(unittest.TestCase):
         ident = self.base_identity_class()
         self.assertRaises(NotImplementedError, ident._get_auth_endpoint)
 
+    def test_rax_endpoints(self):
+        ident = self.rax_identity_class()
+        ident.region = "LON"
+        ep = ident._get_auth_endpoint()
+        self.assertEqual(ep, ident.uk_auth_endpoint)
+        ident.region = "ORD"
+        ep = ident._get_auth_endpoint()
+        self.assertEqual(ep, ident.us_auth_endpoint)
+
     def test_auth_token(self):
         for cls in self.id_classes.values():
             ident = cls()
@@ -188,7 +303,7 @@ class IdentityTest(unittest.TestCase):
         ident = self.base_identity_class()
         fake_resp = fakes.FakeIdentityResponse()
         ident._parse_response(fake_resp.json())
-        expected = ("DFW", "ORD", "FAKE")
+        expected = ("DFW", "ORD", "SYD", "FAKE")
         self.assertEqual(len(pyrax.regions), len(expected))
         for rgn in expected:
             self.assert_(rgn in pyrax.regions)
@@ -227,7 +342,12 @@ class IdentityTest(unittest.TestCase):
         ident = self.base_identity_class()
         sav_post = requests.post
         requests.post = Mock()
+        sav_debug = ident.http_log_debug
+        ident.http_log_debug = True
         uri = utils.random_name()
+        sav_stdout = sys.stdout
+        out = StringIO.StringIO()
+        sys.stdout = out
         utils.add_method(ident, lambda self: "", "_get_auth_endpoint")
         dkv = utils.random_name()
         data = {dkv: dkv}
@@ -237,11 +357,18 @@ class IdentityTest(unittest.TestCase):
         for std_headers in (True, False):
             expected_headers = ident._standard_headers() if std_headers else {}
             expected_headers.update(headers)
-            ident.method_post(uri, data=data, headers=headers,
-                    std_headers=std_headers)
-            requests.post.assert_called_with(uri, data=jdata,
-                    headers=expected_headers)
+            for admin in (True, False):
+                ident.method_post(uri, data=data, headers=headers,
+                        std_headers=std_headers, admin=admin)
+                requests.post.assert_called_with(uri, data=jdata,
+                        headers=expected_headers, verify=True)
+                self.assertTrue(out.getvalue())
+                out.seek(0)
+                out.truncate()
+        out.close()
         requests.post = sav_post
+        ident.http_log_debug = sav_debug
+        sys.stdout = sav_stdout
 
     def test_list_users(self):
         ident = self.rax_identity_class()
@@ -430,6 +557,20 @@ class IdentityTest(unittest.TestCase):
             ident.method_delete = Mock(return_value=resp)
             fake_name = utils.random_name()
             self.assertRaises(exc.UserNotFound, ident.delete_user, fake_name)
+
+    def test_list_roles_for_user(self):
+        for cls in self.id_classes.values():
+            ident = cls()
+            resp = fakes.FakeIdentityResponse()
+            resp.response_type = "users"
+            resp.status_code = 200
+            ident.method_get = Mock(return_value=resp)
+            resp = ident.list_roles_for_user("fake")
+            self.assertTrue(isinstance(resp, list))
+            role = resp[0]
+            self.assertTrue("description" in role)
+            self.assertTrue("name" in role)
+            self.assertTrue("id" in role)
 
     def test_list_credentials(self):
         ident = self.rax_identity_class()

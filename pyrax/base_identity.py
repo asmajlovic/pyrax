@@ -59,7 +59,7 @@ class BaseAuth(object):
 
 
     def __init__(self, username=None, password=None, token=None,
-            credential_file=None, region=None, timeout=None):
+            credential_file=None, region=None, timeout=None, verify_ssl=True):
         self.username = username
         self.password = password
         self.token = token
@@ -68,6 +68,7 @@ class BaseAuth(object):
         self._timeout = timeout
         self.services = {}
         self.regions = set()
+        self.verify_ssl = verify_ssl
 
 
     @property
@@ -131,6 +132,47 @@ class BaseAuth(object):
             self.region = region
         if authenticate:
             self.authenticate()
+
+
+    def auth_with_token(self, token, tenant_id=None, tenant_name=None):
+        """
+        If a valid token is already known, this call will use it to generate
+        the service catalog.
+        """
+        resp = self._call_token_auth(token, tenant_id, tenant_name)
+        resp_body = resp.json()
+        self._parse_response(resp_body)
+        self.authenticated = True
+
+
+    def _call_token_auth(self, token, tenant_id, tenant_name):
+        if not any((tenant_id, tenant_name)):
+            raise exc.MissingAuthSettings("You must supply either the tenant "
+                    "name or tenant ID")
+        if tenant_id:
+            key = "tenantId"
+            val = tenant_id
+        else:
+            key = "tenantName"
+            val = tenant_name
+        body = {"auth": {
+                key: val,
+                "token": {"id": token},
+                }}
+        headers = {"Content-Type": "application/json",
+                "Accept": "application/json",
+                }
+        resp = self.method_post("tokens", data=body, headers=headers,
+                std_headers=False)
+        if resp.status_code == 401:
+            # Invalid authorization
+            raise exc.AuthenticationFailed("Incorrect/unauthorized "
+                    "credentials received")
+        elif resp.status_code > 299:
+            msg_dict = resp.json()
+            msg = msg_dict[msg_dict.keys()[0]]["message"]
+            raise exc.AuthenticationFailed("%s - %s." % (resp.reason, msg))
+        return resp
 
 
     def _read_credential_file(self, cfg):
@@ -202,7 +244,7 @@ class BaseAuth(object):
             if data:
                 print "DATA", jdata
             print
-        return mthd(uri, data=jdata, headers=hdrs)
+        return mthd(uri, data=jdata, headers=hdrs, verify=self.verify_ssl)
 
 
     def authenticate(self):
@@ -236,6 +278,8 @@ class BaseAuth(object):
         access = resp["access"]
         token = access.get("token")
         self.token = token["id"]
+        self.tenant_id = token["tenant"]["id"]
+        self.tenant_name = token["tenant"]["name"]
         self.expires = self._parse_api_time(token["expires"])
         svc_cat = access.get("serviceCatalog")
         self.services = {}
@@ -264,7 +308,7 @@ class BaseAuth(object):
         user = access["user"]
         self.user = {}
         self.user["id"] = user["id"]
-        self.user["name"] = user["name"]
+        self.username = self.user["name"] = user["name"]
         self.user["roles"] = user["roles"]
 
 

@@ -181,7 +181,7 @@ This should return something like:
 Since you can't do anything with your new server until it finishes building, it would be helpful to have a way of determining when the build is complete. So `pyrax` includes the `wait_until()` method in its `utils` module. Here is a typical usage:
 
     srv = cs.servers.create(…)
-    new_srv = pyrax.utils.wait_until(srv, "status", 
+    new_srv = pyrax.utils.wait_until(srv, "status",
             ["ACTIVE", "ERROR"], attempts=0)
 
 When you run the above code, execution will block until the server's status reaches one of the two values in the list. Note that we just don't want to check for "ACTIVE" status, since server creation can fail, and the `wait_until()` call will wait forever.
@@ -252,6 +252,18 @@ Another option is to use call `pyrax.servers.create_image()`, passing in either 
     cs = pyrax.cloudservers
     cs.servers.create_image("my_awesome_server", "my_image_name")
 
+The created image will also appear in the list of images with the name you gave it.
+
+    cs.images.list()
+
+You will need to wait for the imaging to finish before you are able to clone it.
+
+    image_id = server.create_image("base_image")
+    # Unlike the create_server() call, create_image() returns the id rather than an Image object
+    image = cs.images.get(im)
+    image = pyrax.wait_until(image, "status", ["ACTIVE", "ERROR"], attempts=0)
+    cs.servers.create(name="clone", image=image.id, flavor=my_flavor)
+
 
 ## Resizing a Server
 Resizing a server is the process of changing the amount of resources allocated to the server. In Cloud Servers terms, it means changing the Flavor of the server: that is, changing the RAM and disk space allocated to that server.
@@ -262,7 +274,7 @@ Resizing is a multi-step process. First, determine the desired `Flavor` to which
     server = cs.servers.get(id_of_server)
     server.resize(new_flavor_ID)
 
-On the host, a new server instance with the new flavor size will be created based on your existing server. When it is ready, the ID, name, networking, and so forth for the current server instance will be transferred to the new instance. At that point, `get(ID)` will return the new instance, and it will have a status of "CONFIRM_RESIZE". Now you will need to determine if the resize was successful, and that the server is functioning properly. If all is well, call:
+On the host, a new server instance with the new flavor size will be created based on your existing server. When it is ready, the ID, name, networking, and so forth for the current server instance will be transferred to the new instance. At that point, `get(ID)` will return the new instance, and it will have a status of "VERIFY_RESIZE". Now you will need to determine if the resize was successful, and that the server is functioning properly. If all is well, call:
 
     server.confirm_resize()
 

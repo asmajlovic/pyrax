@@ -1,5 +1,48 @@
 # Release Notes for pyrax
 
+###2013.07.23 - Version 1.4.9
+- Fixed a bug introduced in the last release that prevented progressive
+  fetching of objects. GitHub #139
+- Fixed an issue where the `verify_ssl` setting was not being passed to the
+  Identity instance. GitHub #140
+- Added support for returning extra info about API calls to Swift. This
+  includes info on the status, reason, and header information for the call.
+  GitHub #138
+
+###2013.07.19 - Version 1.4.8
+- Added a hack to work around an apparent bug in python-swiftclient that was
+    preventing automatic re-authentication after a token expired. This affects
+    issues #111, #115, #117, and possibly others.
+- Fixed Issue #131 that caused an exception when uploading a binary file.
+- Fixed Issue #134: uploading file-like objects
+- Fixed auth_with_token() to return the full service catalog. Issue #128.
+- Improved the checksum process to be more memory efficient with very large
+    files. Issue #122.
+
+###2013.06.28 - Version 1.4.7
+- Added the `update()` method to modify existing load balancers.
+- The `fetch_object()` method was not raising the correct exception when the
+    requested object/container combination does not exist.
+- Added support for downloading objects in nested folders. GitHub #104.
+- Fixed an issue (#110) that was causing the purge from CDN command to fail.
+- Added support for bypassing SSL certificate verification with cloud servers,
+    based on PR #96.
+- Improved unit test coverage for several modules.
+- Add `eq` and `ne` to the `Node` class in cloud load balancers.
+- Updated the installation guide with identity_type setting. Issue #105.
+- Fixed bug where `tenant_id` was ignored if passed to `set_credentials()`.
+- Added `return_none` option to cloud files `store_object()` method.
+
+###2013.06.13 - Version 1.4.6
+- Added the ability to authenticate with an existing token.
+- Fixed an issue where the default environment was not properly set. Issue #87.
+- Modified tests so that they work with PyPy.
+- Added better explanation of pyrax's ability to automatically re-authenticate
+    when a token expires. Issue #93.
+- Fixed a bug resulting from overly-aggressive URL quoting.
+- Removed the 'default_identity_type' definition in pyrax/__init__.py, as it
+    is no longer needed. Issue #95.
+
 ###2013.06.05 - Version 1.4.5
 - Fixed a bug that prevented region from being properly set. Issue #86.
 

@@ -32,29 +32,61 @@ import pyrax.exceptions as exc
 EARLY_DATE_STR = "1900-01-01T00:00:00"
 CONNECTION_TIMEOUT = 20
 CONNECTION_RETRIES = 5
+AUTH_ATTEMPTS = 2
 
 no_such_container_pattern = re.compile(r"Container GET|HEAD failed: .+/(.+) 404")
+no_such_object_pattern = re.compile(r"Object GET|HEAD failed: .+/(.+) 404")
 etag_fail_pat = r"Object PUT failed: .+/([^/]+)/(\S+) 422 Unprocessable Entity"
 etag_failed_pattern = re.compile(etag_fail_pat)
 
+
 def handle_swiftclient_exception(fnc):
     @wraps(fnc)
-    def _wrapped(*args, **kwargs):
-        try:
-            return fnc(*args, **kwargs)
-        except _swift_client.ClientException as e:
-            str_error = "%s" % e
-            bad_container = no_such_container_pattern.search(str_error)
-            if bad_container:
-                raise exc.NoSuchContainer("Container '%s' doesn't exist" %
-                        bad_container.groups()[0])
-            failed_upload = etag_failed_pattern.search(str_error)
-            if failed_upload:
-                cont, fname = failed_upload.groups()
-                raise exc.UploadFailed("Upload of file '%(fname)s' to "
-                        "container '%(cont)s' failed." % locals())
-            # Not handled; re-raise
-            raise
+    def _wrapped(self, *args, **kwargs):
+        attempts = 0
+        clt_url = self.connection.url
+
+        def close_swiftclient_conn(conn):
+            """Swiftclient often leaves the connection open."""
+            try:
+                conn.http_conn[1].close()
+            except Exception:
+                pass
+
+        while attempts < AUTH_ATTEMPTS:
+            attempts += 1
+            try:
+                close_swiftclient_conn(self.connection)
+                ret = fnc(self, *args, **kwargs)
+                return ret
+            except _swift_client.ClientException as e:
+                if attempts < AUTH_ATTEMPTS:
+                    # Assume it is an auth failure. Re-auth and retry.
+                    ### NOTE: This is a hack to get around an apparent bug
+                    ### in python-swiftclient when using Rackspace auth.
+                    pyrax.authenticate(connect=False)
+                    if pyrax.identity.authenticated:
+                        pyrax.plug_hole_in_swiftclient_auth(self, clt_url)
+                    continue
+                str_error = "%s" % e
+                bad_container = no_such_container_pattern.search(str_error)
+                if bad_container:
+                    raise exc.NoSuchContainer("Container '%s' doesn't exist" %
+                            bad_container.groups()[0])
+                bad_object = no_such_object_pattern.search(str_error)
+                if bad_object:
+                    raise exc.NoSuchObject("object '%s' doesn't exist" %
+                            bad_object.groups()[0])
+                failed_upload = etag_failed_pattern.search(str_error)
+                if failed_upload:
+                    cont, fname = failed_upload.groups()
+                    raise exc.UploadFailed("Upload of file '%(fname)s' to "
+                            "container '%(cont)s' failed." % locals())
+                if e.http_status == 404:
+                    raise exc.NoSuchObject("The requested object/container "
+                            "does not exist.")
+                # Not handled; re-raise
+                raise
     return _wrapped
 
 
@@ -86,7 +118,8 @@ class CFClient(object):
 
     def __init__(self, auth_endpoint, username, api_key=None, password=None,
             tenant_name=None, preauthurl=None, preauthtoken=None,
-            auth_version="2", os_options=None, http_log_debug=False):
+            auth_version="2", os_options=None, verify_ssl=True,
+            http_log_debug=False):
         self.connection = None
         self.cdn_connection = None
         self.http_log_debug = http_log_debug
@@ -95,18 +128,21 @@ class CFClient(object):
         self._make_connections(auth_endpoint, username, api_key, password,
                 tenant_name=tenant_name, preauthurl=preauthurl,
                 preauthtoken=preauthtoken, auth_version=auth_version,
-                os_options=os_options, http_log_debug=http_log_debug)
+                os_options=os_options, verify_ssl=verify_ssl,
+                http_log_debug=http_log_debug)
 
 
     def _make_connections(self, auth_endpoint, username, api_key, password,
             tenant_name=None, preauthurl=None, preauthtoken=None,
-            auth_version="2", os_options=None, http_log_debug=None):
+            auth_version="2", os_options=None, verify_ssl=True,
+            http_log_debug=None):
         cdn_url = os_options.pop("object_cdn_url", None)
         pw_key = api_key or password
+        insecure = not verify_ssl
         self.connection = Connection(auth_endpoint, username, pw_key,
                 tenant_name, preauthurl=preauthurl, preauthtoken=preauthtoken,
                 auth_version=auth_version, os_options=os_options,
-                http_log_debug=http_log_debug)
+                insecure=insecure, http_log_debug=http_log_debug)
         if cdn_url:
             self.connection._make_cdn_connection(cdn_url)
 
@@ -142,7 +178,8 @@ class CFClient(object):
 
 
     @handle_swiftclient_exception
-    def set_account_metadata(self, metadata, clear=False):
+    def set_account_metadata(self, metadata, clear=False,
+            extra_info=None):
         """
         Accepts a dictionary of metadata key/value pairs and updates
         the specified account metadata with them.
@@ -150,6 +187,10 @@ class CFClient(object):
         If 'clear' is True, any existing metadata is deleted and only
         the passed metadata is retained. Otherwise, the values passed
         here update the account's metadata.
+
+        extra_info is an optional dictionary which will be
+        populated with 'status', 'reason', and 'headers' keys from the
+        underlying swiftclient call.
         """
         # Add the metadata prefix, if needed.
         massaged = self._massage_metakeys(metadata, self.account_meta_prefix)
@@ -159,7 +200,8 @@ class CFClient(object):
             for ckey in curr_meta:
                 new_meta[ckey] = ""
         new_meta.update(massaged)
-        self.connection.post_account(new_meta)
+        self.connection.post_account(new_meta,
+                response_dict=extra_info)
 
 
     @handle_swiftclient_exception
@@ -226,7 +268,8 @@ class CFClient(object):
         return temp_url
 
 
-    def delete_object_in_seconds(self, cont, obj, seconds):
+    def delete_object_in_seconds(self, cont, obj, seconds,
+            extra_info=None):
         """
         Sets the object in the specified container to be deleted after the
         specified number of seconds.
@@ -234,7 +277,8 @@ class CFClient(object):
         cname = self._resolve_name(cont)
         oname = self._resolve_name(obj)
         headers = {"X-Delete-After": seconds}
-        self.connection.post_object(cname, oname, headers=headers)
+        self.connection.post_object(cname, oname, headers=headers,
+                response_dict=extra_info)
 
 
     @handle_swiftclient_exception
@@ -251,7 +295,8 @@ class CFClient(object):
 
 
     @handle_swiftclient_exception
-    def set_container_metadata(self, container, metadata, clear=False):
+    def set_container_metadata(self, container, metadata, clear=False,
+            extra_info=None):
         """
         Accepts a dictionary of metadata key/value pairs and updates
         the specified container metadata with them.
@@ -259,6 +304,10 @@ class CFClient(object):
         If 'clear' is True, any existing metadata is deleted and only
         the passed metadata is retained. Otherwise, the values passed
         here update the container's metadata.
+
+        extra_info is an optional dictionary which will be
+        populated with 'status', 'reason', and 'headers' keys from the
+        underlying swiftclient call.
         """
         # Add the metadata prefix, if needed.
         massaged = self._massage_metakeys(metadata, self.container_meta_prefix)
@@ -269,11 +318,13 @@ class CFClient(object):
             for ckey in curr_meta:
                 new_meta[ckey] = ""
         new_meta.update(massaged)
-        self.connection.post_container(cname, new_meta)
+        self.connection.post_container(cname, new_meta,
+                response_dict=extra_info)
 
 
     @handle_swiftclient_exception
-    def remove_container_metadata_key(self, container, key):
+    def remove_container_metadata_key(self, container, key,
+            extra_info=None):
         """
         Removes the specified key from the container's metadata. If the key
         does not exist in the metadata, nothing is done.
@@ -282,7 +333,8 @@ class CFClient(object):
         # Add the metadata prefix, if needed.
         massaged = self._massage_metakeys(meta_dict, self.container_meta_prefix)
         cname = self._resolve_name(container)
-        self.connection.post_container(cname, massaged)
+        self.connection.post_container(cname, massaged,
+                response_dict=extra_info)
 
 
     @handle_swiftclient_exception
@@ -341,7 +393,8 @@ class CFClient(object):
 
 
     @handle_swiftclient_exception
-    def set_object_metadata(self, container, obj, metadata, clear=False):
+    def set_object_metadata(self, container, obj, metadata, clear=False,
+            extra_info=None):
         """
         Accepts a dictionary of metadata key/value pairs and updates
         the specified object metadata with them.
@@ -349,6 +402,10 @@ class CFClient(object):
         If 'clear' is True, any existing metadata is deleted and only
         the passed metadata is retained. Otherwise, the values passed
         here update the object's metadata.
+
+        extra_info is an optional dictionary which will be
+        populated with 'status', 'reason', and 'headers' keys from the
+        underlying swiftclient call.
         """
         # Add the metadata prefix, if needed.
         massaged = self._massage_metakeys(metadata, self.object_meta_prefix)
@@ -371,7 +428,8 @@ class CFClient(object):
                 to_pop.append(key)
         for key in to_pop:
             new_meta.pop(key)
-        self.connection.post_object(cname, oname, new_meta)
+        self.connection.post_object(cname, oname, new_meta,
+                response_dict=extra_info)
 
 
     @handle_swiftclient_exception
@@ -384,21 +442,30 @@ class CFClient(object):
 
 
     @handle_swiftclient_exception
-    def create_container(self, name):
-        """Creates a container with the specified name."""
+    def create_container(self, name, extra_info=None):
+        """Creates a container with the specified name.
+
+        extra_info is an optional dictionary which will be
+        populated with 'status', 'reason', and 'headers' keys from the
+        underlying swiftclient call.
+        """
         name = self._resolve_name(name)
-        self.connection.put_container(name)
+        self.connection.put_container(name, response_dict=extra_info)
         return self.get_container(name)
 
 
     @handle_swiftclient_exception
-    def delete_container(self, container, del_objects=False):
+    def delete_container(self, container, del_objects=False, extra_info=None):
         """
         Deletes the specified container. This will fail if the container
         still has objects stored in it; if that's the case and you want
         to delete the container anyway, set del_objects to True, and
         the container's objects will be deleted before the container is
         deleted.
+
+        extra_info is an optional dictionary which will be
+        populated with 'status', 'reason', and 'headers' keys from the
+        underlying swiftclient call.
         """
         self._remove_container_from_cache(container)
         cname = self._resolve_name(container)
@@ -406,7 +473,7 @@ class CFClient(object):
             objs = self.get_container_object_names(cname)
             for obj in objs:
                 self.delete_object(cname, obj)
-        self.connection.delete_container(cname)
+        self.connection.delete_container(cname, response_dict=extra_info)
         return True
 
 
@@ -417,28 +484,48 @@ class CFClient(object):
 
 
     @handle_swiftclient_exception
-    def delete_object(self, container, name):
-        """Deletes the specified object from the container."""
+    def delete_object(self, container, name, extra_info=None):
+        """Deletes the specified object from the container.
+
+        extra_info is an optional dictionary which will be
+        populated with 'status', 'reason', and 'headers' keys from the
+        underlying swiftclient call.
+        """
         ct = self.get_container(container)
         ct.remove_from_cache(name)
         oname = self._resolve_name(name)
-        self.connection.delete_object(ct.name, oname)
+        self.connection.delete_object(ct.name, oname,
+                response_dict=extra_info)
         return True
 
 
     def get_object(self, container, obj_name):
         """Returns a StorageObject instance for the object in the container."""
-        cont = self.get_container(container)
-        obj = cont.get_object(self._resolve_name(obj_name))
-        return obj
+        # NOTE: This is a hack to get around a bug in the current version of
+        # the swiftclient library.
+        for attempts in range(2):
+            try:
+                cont = self.get_container(container)
+                obj = cont.get_object(self._resolve_name(obj_name))
+                return obj
+            except (exc.NoSuchContainer, exc.NoSuchObject) as e:
+                continue
+        # If we made it to here, it is an actual exception
+        raise
 
 
     @handle_swiftclient_exception
     def store_object(self, container, obj_name, data, content_type=None,
-            etag=None, content_encoding=None, ttl=None):
+            etag=None, content_encoding=None, ttl=None, return_none=False,
+            extra_info=None):
         """
         Creates a new object in the specified container, and populates it with
-        the given data.
+        the given data. A StorageObject reference to the uploaded file
+        will be returned, unless 'return_none' is set to True.
+
+        extra_info is an optional dictionary which will be
+        populated with 'status', 'reason', and 'headers' keys from the
+        underlying swiftclient call.
         """
         cont = self.get_container(container)
         headers = {}
@@ -456,12 +543,16 @@ class CFClient(object):
             with open(tmp, "rb") as tmpfile:
                 self.connection.put_object(cont.name, obj_name,
                         contents=tmpfile, content_type=content_type, etag=etag,
-                        headers=headers)
-        return self.get_object(container, obj_name)
+                        headers=headers, response_dict=extra_info)
+        if return_none:
+            return None
+        else:
+            return self.get_object(container, obj_name)
 
 
     @handle_swiftclient_exception
-    def copy_object(self, container, obj_name, new_container, new_obj_name=None):
+    def copy_object(self, container, obj_name, new_container, new_obj_name=None,
+            extra_info=None):
         """
         Copies the object to the new container, optionally giving it a new name.
         If you copy to the same container, you must supply a different name.
@@ -473,7 +564,7 @@ class CFClient(object):
             new_obj_name = obj.name
         hdrs = {"X-Copy-From": "/%s/%s" % (cont.name, obj.name)}
         return self.connection.put_object(new_cont.name, new_obj_name,
-                contents=None, headers=hdrs)
+                contents=None, headers=hdrs, response_dict=extra_info)
 
 
     @handle_swiftclient_exception
@@ -491,7 +582,7 @@ class CFClient(object):
 
     @handle_swiftclient_exception
     def change_object_content_type(self, container, obj_name, new_ctype,
-            guess=False):
+            guess=False, extra_info=None):
         """
         Copies object to itself, but applies a new content-type. The guess
         feature requires the container to be CDN-enabled. If not then the
@@ -507,14 +598,15 @@ class CFClient(object):
             new_ctype = mimetypes.guess_type(obj_url)[0]
         hdrs = {"X-Copy-From": "/%s/%s" % (cont.name, obj.name)}
         self.connection.put_object(cont.name, obj.name, contents=None,
-                headers=hdrs, content_type=new_ctype)
+                headers=hdrs, content_type=new_ctype,
+                response_dict=extra_info)
         cont.remove_from_cache(obj.name)
         return
 
     @handle_swiftclient_exception
     def upload_file(self, container, file_or_path, obj_name=None,
             content_type=None, etag=None, return_none=False,
-            content_encoding=None, ttl=None):
+            content_encoding=None, ttl=None, extra_info=None):
         """
         Uploads the specified file to the container. If no name is supplied,
         the file's name will be used. Either a file path or an open file-like
@@ -529,6 +621,7 @@ class CFClient(object):
         be stored in seconds in the `ttl` parameter. If this is specified, the
         object will be deleted after that number of seconds.
         """
+        # TODO-BC: response_dict when looping? as a list of them?
         cont = self.get_container(container)
 
         def get_file_size(fileobj):
@@ -549,7 +642,7 @@ class CFClient(object):
                 # We can just upload it as-is.
                 return self.connection.put_object(cont.name, obj_name,
                         contents=fileobj, content_type=content_type,
-                        etag=etag, headers=headers)
+                        etag=etag, headers=headers, response_dict=extra_info)
             # Files larger than self.max_file_size must be segmented
             # and uploaded separately.
             num_segments = int(math.ceil(float(fsize) / self.max_file_size))
@@ -567,11 +660,13 @@ class CFClient(object):
                         etag = utils.get_checksum(tmp)
                         self.connection.put_object(cont.name, seg_name,
                                 contents=tmp, content_type=content_type,
-                                etag=etag, headers=headers)
+                                etag=etag, headers=headers,
+                                response_dict=extra_info)
             # Upload the manifest
             headers["X-Object-Meta-Manifest"] = "%s." % fname
             return self.connection.put_object(cont.name, fname,
-                    contents=None, headers=headers)
+                    contents=None, headers=headers,
+                    response_dict=extra_info)
 
         ispath = isinstance(file_or_path, basestring)
         if ispath:
@@ -581,9 +676,15 @@ class CFClient(object):
                         file_or_path)
             fname = os.path.basename(file_or_path)
         else:
-            fname = file_or_path.name
+            try:
+                fname = file_or_path.name
+            except AttributeError:
+                fname = None
         if not obj_name:
             obj_name = fname
+        if not obj_name:
+            raise InvalidUploadID("No filename provided and/or it cannot be "
+                    "inferred from context")
 
         headers = {}
         if content_encoding is not None:
@@ -799,8 +900,9 @@ class CFClient(object):
         return not self.folder_upload_status[upload_key]["continue"]
 
 
+    @handle_swiftclient_exception
     def fetch_object(self, container, obj_name, include_meta=False,
-            chunk_size=None):
+            chunk_size=None, extra_info=None):
         """
         Fetches the object from storage.
 
@@ -814,15 +916,44 @@ class CFClient(object):
         2-tuple:
             Element 0: a dictionary containing metadata about the file.
             Element 1: a stream of bytes representing the object's contents.
+
+        extra_info is an optional dictionary which will be
+        populated with 'status', 'reason', and 'headers' keys from the
+        underlying swiftclient call.
         """
         cname = self._resolve_name(container)
         oname = self._resolve_name(obj_name)
         (meta, data) = self.connection.get_object(cname, oname,
-                resp_chunk_size=chunk_size)
+                resp_chunk_size=chunk_size, response_dict=extra_info)
         if include_meta:
             return (meta, data)
         else:
             return data
+
+
+    @handle_swiftclient_exception
+    def download_object(self, container, obj_name, directory, structure=True):
+        """
+        Fetches the object from storage, and writes it to the specified
+        directory. The directory must exist before calling this method.
+
+        If the object name represents a nested folder structure, such as
+        "foo/bar/baz.txt", that folder structure will be created in the target
+        directory by default. If you do not want the nested folders to be
+        created, pass `structure=False` in the parameters.
+        """
+        if not os.path.isdir(directory):
+            raise exc.FolderNotFound("The directory '%s' does not exist." %
+                    directory)
+        path, fname = os.path.split(obj_name)
+        if structure:
+            fullpath = os.path.join(directory, path)
+            os.makedirs(fullpath)
+            target = os.path.join(fullpath, fname)
+        else:
+            target = os.path.join(directory, fname)
+        with open(target, "wb") as dl:
+            dl.write(self.fetch_object(container, obj_name))
 
 
     @handle_swiftclient_exception
@@ -1031,7 +1162,7 @@ class CFClient(object):
                 email_addresses = [email_addresses]
             emls = ", ".join(email_addresses)
             hdrs = {"X-Purge-Email": emls}
-        response = self.connection.cdn_request("DELETE", ct.name, oname,
+        response = self.connection.cdn_request("DELETE", [ct.name, oname],
                 hdrs=hdrs)
         # Read the response to force it to close for the next request.
         response.read()

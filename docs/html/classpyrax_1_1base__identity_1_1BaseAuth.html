@@ -134,6 +134,8 @@ Public Member Functions</h2></td></tr>
 <tr><td class="mdescLeft">&#160;</td><td class="mdescRight">Sets the username and password directly.  <a href="#a29ca4bc84123f642dc6cf191e2d61543"></a><br/></td></tr>
 <tr><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#a31357d099c87594b661d674bb12a56c0">set_credential_file</a></td></tr>
 <tr><td class="mdescLeft">&#160;</td><td class="mdescRight">Reads in the credentials from the supplied file.  <a href="#a31357d099c87594b661d674bb12a56c0"></a><br/></td></tr>
+<tr><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#a2323e991798b13063610509c2bb4aaf4">auth_with_token</a></td></tr>
+<tr><td class="mdescLeft">&#160;</td><td class="mdescRight">If a valid token is already known, this call will use it to generate the service catalog.  <a href="#a2323e991798b13063610509c2bb4aaf4"></a><br/></td></tr>
 <tr><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#ac1f6b6211af6452ff038fbb8a25f4822">method_get</a></td></tr>
 <tr><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#a2b66a305940ec13628995f2a93c55b89">method_head</a></td></tr>
 <tr><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#a248efd43b254ea67d11575531bad3247">method_post</a></td></tr>
@@ -182,9 +184,9 @@ Public Attributes</h2></td></tr>
 <tr><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#a0bf3c8aa9017e52dd041b7e2c3327621">services</a></td></tr>
 <tr><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#a4c4786354df7358bf12c3c65069dd8b7">regions</a></td></tr>
 <tr><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#a9f8b98f9d8644964bbb15a9fb217ccb7">tenant_id</a></td></tr>
+<tr><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#a0eda5ccf1b845b56032e5dfb7e536642">tenant_name</a></td></tr>
 <tr><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#a49192f7cc960a0aab538e014cf449225">expires</a></td></tr>
 <tr><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#a5cc32e366c87c4cb49e4309b75f57d64">user</a></td></tr>
-<tr><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#a0eda5ccf1b845b56032e5dfb7e536642">tenant_name</a></td></tr>
 <tr><td colspan="2"><h2><a name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
 <tr><td class="memItemLeft" align="right" valign="top">string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#aad02f271a6536fa078c6d1369ffdadc4">username</a> = &quot;&quot;</td></tr>
@@ -293,6 +295,49 @@ Static Public Attributes</h2></td></tr>
 <div class="memdoc">
 
 <p>Simple alias to self.token. </p>
+
+</div>
+</div>
+<a class="anchor" id="a2323e991798b13063610509c2bb4aaf4"></a><!-- doxytag: member="pyrax::base_identity::BaseAuth::auth_with_token" ref="a2323e991798b13063610509c2bb4aaf4" args="" -->
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def <a class="el" href="classpyrax_1_1base__identity_1_1BaseAuth.html#a2323e991798b13063610509c2bb4aaf4">auth_with_token</a> </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>token</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>tenant_id</em> = <code>None</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>tenant_name</em> = <code>None</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div>
+<div class="memdoc">
+
+<p>If a valid token is already known, this call will use it to generate the service catalog. </p>
+
+<p>Reimplemented in <a class="el" href="classpyrax_1_1identity_1_1rax__identity_1_1RaxIdentity.html#a2323e991798b13063610509c2bb4aaf4">RaxIdentity</a>.</p>
 
 </div>
 </div>
@@ -1165,6 +1210,8 @@ Static Public Attributes</h2></td></tr>
 </div>
 <div class="memdoc">
 
+<p>Reimplemented in <a class="el" href="classpyrax_1_1identity_1_1rax__identity_1_1RaxIdentity.html#a48f0dc4cf47cd14cdfda7e8495b0a76b">RaxIdentity</a>.</p>
+
 </div>
 </div>
 <a class="anchor" id="ac7a7efd7d064c324be145a0e88c25be8"></a><!-- doxytag: member="pyrax::base_identity::BaseAuth::expires" ref="ac7a7efd7d064c324be145a0e88c25be8" args="" -->
@@ -1286,8 +1333,6 @@ Static Public Attributes</h2></td></tr>
 </div>
 <div class="memdoc">
 
-<p>Reimplemented in <a class="el" href="classpyrax_1_1identity_1_1rax__identity_1_1RaxIdentity.html#a9f8b98f9d8644964bbb15a9fb217ccb7">RaxIdentity</a>.</p>
-
 </div>
 </div>
 <a class="anchor" id="a9f8b98f9d8644964bbb15a9fb217ccb7"></a><!-- doxytag: member="pyrax::base_identity::BaseAuth::tenant_id" ref="a9f8b98f9d8644964bbb15a9fb217ccb7" args="" -->
@@ -1300,8 +1345,6 @@ Static Public Attributes</h2></td></tr>
       </table>
 </div>
 <div class="memdoc">
-
-<p>Reimplemented in <a class="el" href="classpyrax_1_1identity_1_1rax__identity_1_1RaxIdentity.html#a9f8b98f9d8644964bbb15a9fb217ccb7">RaxIdentity</a>.</p>
 
 </div>
 </div>
@@ -1316,8 +1359,6 @@ Static Public Attributes</h2></td></tr>
 </div>
 <div class="memdoc">
 
-<p>Reimplemented in <a class="el" href="classpyrax_1_1identity_1_1rax__identity_1_1RaxIdentity.html#a0eda5ccf1b845b56032e5dfb7e536642">RaxIdentity</a>.</p>
-
 </div>
 </div>
 <a class="anchor" id="a0eda5ccf1b845b56032e5dfb7e536642"></a><!-- doxytag: member="pyrax::base_identity::BaseAuth::tenant_name" ref="a0eda5ccf1b845b56032e5dfb7e536642" args="" -->
@@ -1330,8 +1371,6 @@ Static Public Attributes</h2></td></tr>
       </table>
 </div>
 <div class="memdoc">
-
-<p>Reimplemented in <a class="el" href="classpyrax_1_1identity_1_1rax__identity_1_1RaxIdentity.html#a0eda5ccf1b845b56032e5dfb7e536642">RaxIdentity</a>.</p>
 
 </div>
 </div>
@@ -1438,7 +1477,7 @@ Static Public Attributes</h2></td></tr>
 
 
 <hr class="footer"/><address class="footer"><small>
-Generated on Wed Jun 5 2013 13:58:06 for pyrax by &#160;<a href="http://www.doxygen.org/index.html">
+Generated on Fri Jul 19 2013 08:17:05 for pyrax by &#160;<a href="http://www.doxygen.org/index.html">
 <img class="footer" src="doxygen.png" alt="doxygen"/>
 </a> 1.7.6.1
 </small></address>

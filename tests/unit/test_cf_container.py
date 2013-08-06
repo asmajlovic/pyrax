@@ -10,6 +10,7 @@ from mock import MagicMock as Mock
 
 import pyrax
 from pyrax.cf_wrapper.container import Container
+from pyrax.cf_wrapper.container import Fault
 import pyrax.utils as utils
 import pyrax.exceptions as exc
 from tests.unit.fakes import FakeContainer
@@ -62,6 +63,10 @@ class CF_ContainerTest(unittest.TestCase):
         pyrax.connect_to_cloud_loadbalancers = octclb
         octcbs = self.orig_connect_to_cloud_blockstorage
         pyrax.connect_to_cloud_blockstorage = octcbs
+
+    def test_fault(self):
+        fault = Fault()
+        self.assertFalse(fault)
 
     def test_fetch_cdn(self):
         self.client.connection.cdn_request = Mock()
@@ -174,7 +179,7 @@ class CF_ContainerTest(unittest.TestCase):
         cont.client.connection.delete_object = Mock()
         cont.delete_object(self.obj_name)
         cont.client.connection.delete_object.assert_called_with(self.cont_name,
-                self.obj_name)
+                self.obj_name, response_dict=None)
 
     @patch('pyrax.cf_wrapper.client.Container', new=FakeContainer)
     def test_delete_all_objects(self):
@@ -186,14 +191,34 @@ class CF_ContainerTest(unittest.TestCase):
                 return_value=[self.obj_name])
         cont.delete_all_objects()
         cont.client.connection.delete_object.assert_called_with(
-                self.cont_name, self.obj_name)
+                self.cont_name, self.obj_name, response_dict=None)
 
     def test_delete(self):
         cont = self.container
         cont.client.connection.delete_container = Mock()
         cont.delete()
         cont.client.connection.delete_container.assert_called_with(
-                self.cont_name)
+                self.cont_name, response_dict=None)
+
+    def test_fetch_object(self):
+        cont = self.container
+        cont.client.fetch_object = Mock()
+        oname = utils.random_name(ascii_only=True)
+        incmeta = random.choice((True, False))
+        csize = random.randint(0, 1000)
+        cont.fetch_object(oname, include_meta=incmeta, chunk_size=csize)
+        cont.client.fetch_object.assert_called_once_with(cont, oname,
+                include_meta=incmeta, chunk_size=csize)
+
+    def test_download_object(self):
+        cont = self.container
+        cont.client.download_object = Mock()
+        oname = utils.random_name(ascii_only=True)
+        dname = utils.random_name(ascii_only=True)
+        stru = random.choice((True, False))
+        cont.download_object(oname, dname, structure=stru)
+        cont.client.download_object.assert_called_once_with(cont, oname,
+                dname, structure=stru)
 
     def test_get_metadata(self):
         cont = self.container
@@ -209,7 +234,7 @@ class CF_ContainerTest(unittest.TestCase):
         cont.client.connection.post_container = Mock()
         cont.set_metadata({"newkey": "newval"})
         cont.client.connection.post_container.assert_called_with(cont.name,
-                {"x-container-meta-newkey": "newval"})
+                {"x-container-meta-newkey": "newval"}, response_dict=None)
 
     def test_set_web_index_page(self):
         cont = self.container
@@ -217,7 +242,7 @@ class CF_ContainerTest(unittest.TestCase):
         cont.client.connection.post_container = Mock()
         cont.set_web_index_page(page)
         cont.client.connection.post_container.assert_called_with(cont.name,
-                {"x-container-meta-web-index": page})
+                {"x-container-meta-web-index": page}, response_dict=None)
 
     def test_set_web_error_page(self):
         cont = self.container
@@ -225,7 +250,7 @@ class CF_ContainerTest(unittest.TestCase):
         cont.client.connection.post_container = Mock()
         cont.set_web_error_page(page)
         cont.client.connection.post_container.assert_called_with(cont.name,
-                {"x-container-meta-web-error": page})
+                {"x-container-meta-web-error": page}, response_dict=None)
 
     def test_make_public(self, ttl=None):
         cont = self.container
@@ -278,7 +303,8 @@ class CF_ContainerTest(unittest.TestCase):
         obj_name = utils.random_name()
         cont.delete_object_in_seconds(obj_name, seconds=secs)
         cont.client.connection.post_object.assert_called_with(cont.name,
-                obj_name, headers={'X-Delete-After': secs})
+                obj_name, headers={'X-Delete-After': secs},
+                response_dict=None)
 
         nm = utils.random_name(ascii_only=True)
         sav = cont.name

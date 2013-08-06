@@ -4,6 +4,7 @@
 import datetime
 import hashlib
 import os
+import random
 import StringIO
 import sys
 import unittest
@@ -75,6 +76,17 @@ class UtilsTest(unittest.TestCase):
         received = utils.get_checksum(test, enc)
         self.assertEqual(expected, received)
 
+    def test_get_checksum_from_binary(self):
+#        test = utils.random_name()
+#        test = open("tests/unit/python-logo.png", "rb").read()
+        test = fakes.png_file
+        md = hashlib.md5()
+        enc = "utf8"
+        md.update(test)
+        expected = md.hexdigest()
+        received = utils.get_checksum(test)
+        self.assertEqual(expected, received)
+
     def test_get_checksum_from_file(self):
         test = "some random text"
         md = hashlib.md5()
@@ -141,6 +153,14 @@ class UtilsTest(unittest.TestCase):
         self.assertTrue(hasattr(obj, "fake_name"))
         self.assertTrue(callable(obj.fake_name))
 
+    def test_add_method_no_name(self):
+        def fake_method(self):
+            pass
+        obj = fakes.FakeEntity()
+        utils.add_method(obj, fake_method)
+        self.assertTrue(hasattr(obj, "fake_method"))
+        self.assertTrue(callable(obj.fake_method))
+
     def test_env(self):
         args = ("foo", "bar")
         ret = utils.env(*args)
@@ -184,9 +204,15 @@ class UtilsTest(unittest.TestCase):
         status_obj.manager = fakes.FakeManager()
         status_obj.manager.get = Mock(return_value=status_obj)
         status_obj.get = status_obj.manager.get
-        ret = utils.wait_until(status_obj, "status", "ready", interval=0.1)
+        sav_out = sys.stdout
+        out = StringIO.StringIO()
+        sys.stdout = out
+        ret = utils.wait_until(status_obj, "status", "ready", interval=0.01,
+                verbose=True, verbose_atts="progress")
         self.assertTrue(isinstance(ret, fakes.FakeStatusChanger))
         self.assertEqual(ret.status, "ready")
+        self.assertTrue(len(out.getvalue()) > 0)
+        sys.stdout = sav_out
 
     def test_wait_until_fail(self):
         status_obj = fakes.FakeStatusChanger()
@@ -195,7 +221,7 @@ class UtilsTest(unittest.TestCase):
         status_obj.manager = fakes.FakeManager()
         status_obj.manager.get = Mock(return_value=status_obj)
         status_obj.get = status_obj.manager.get
-        ret = utils.wait_until(status_obj, "status", "fake", interval=0.1,
+        ret = utils.wait_until(status_obj, "status", "fake", interval=0.01,
                 attempts=2)
         self.assertFalse(ret.status == "fake")
 
@@ -206,9 +232,27 @@ class UtilsTest(unittest.TestCase):
         status_obj.manager.get = Mock(return_value=status_obj)
         status_obj.get = status_obj.manager.get
         thread = utils.wait_until(obj=status_obj, att="status", desired="ready",
-                interval=0.1, callback=cback)
+                interval=0.01, callback=cback)
         thread.join()
         cback.assert_called_once_with(status_obj)
+
+    def test_wait_for_build(self):
+        sav = utils.wait_until
+        utils.wait_until = Mock()
+        obj = fakes.FakeEntity()
+        att = utils.random_name()
+        desired = utils.random_name()
+        callback = utils.random_name()
+        interval = utils.random_name()
+        attempts = utils.random_name()
+        verbose = utils.random_name()
+        verbose_atts = utils.random_name()
+        utils.wait_for_build(obj, att, desired, callback, interval, attempts,
+                verbose, verbose_atts)
+        utils.wait_until.assert_called_once_with(obj, att, desired,
+                callback=callback, interval=interval, attempts=attempts,
+                verbose=verbose, verbose_atts=verbose_atts)
+        utils.wait_until = sav
 
     def test_time_string_empty(self):
         testval = None
@@ -262,21 +306,48 @@ class UtilsTest(unittest.TestCase):
         self.assertFalse(utils.match_pattern("some.good", ignore_pat))
 
     def test_get_id(self):
-        target = "test_id"
+        target = utils.random_name()
 
-        class Obj_with_id(object):
+        class ObjWithID(object):
             id = target
 
-        obj = Obj_with_id()
-        self.assertEqual(utils.get_id(obj), target)
+        obj = ObjWithID()
         self.assertEqual(utils.get_id(obj), target)
         self.assertEqual(utils.get_id(obj.id), target)
+        plain = object()
+        self.assertEqual(utils.get_id(plain), plain)
+
+    def test_get_name(self):
+        nm = utils.random_name()
+
+        class ObjWithName(object):
+            name = nm
+
+        obj = ObjWithName()
+        self.assertEqual(utils.get_name(obj), nm)
+        self.assertEqual(utils.get_name(obj.name), nm)
+        self.assertRaises(exc.MissingName, utils.get_name, object())
 
     def test_import_class(self):
         cls_string = "tests.unit.fakes.FakeManager"
         ret = utils.import_class(cls_string)
         self.assertTrue(ret is fakes.FakeManager)
 
+    def test_update_exc(self):
+        msg1 = utils.random_name()
+        msg2 = utils.random_name()
+        err = exc.PyraxException(400)
+        err.message = msg1
+        sep = random.choice(("!", "@", "#", "$"))
+        exp = "%s%s%s" % (msg2, sep, msg1)
+        ret = utils.update_exc(err, msg2, before=True, separator=sep)
+        self.assertEqual(ret.message, exp)
+        err = exc.PyraxException(400)
+        err.message = msg1
+        sep = random.choice(("!", "@", "#", "$"))
+        exp = "%s%s%s" % (msg1, sep, msg2)
+        ret = utils.update_exc(err, msg2, before=False, separator=sep)
+        self.assertEqual(ret.message, exp)
 
 
 if __name__ == "__main__":

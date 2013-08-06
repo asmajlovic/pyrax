@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import json
+import os
 import uuid
 
+import pyrax
 from pyrax.cf_wrapper.client import FolderUploader
 from pyrax.cf_wrapper.container import Container
 from pyrax.cf_wrapper.storage_object import StorageObject
@@ -37,7 +39,7 @@ import pyrax.utils as utils
 example_uri = "http://example.com"
 
 
-class FakeResponse(dict):
+class FakeResponse(object):
     headers = {}
     body = ""
     status = 200
@@ -414,7 +416,11 @@ debug =
 fake_identity_user_response = {
         "users": [{"name": "fake", "id": "fake"},
             {"name": "faker", "id": "faker"}],
-        "user": {"name": "fake", "id": "fake"}}
+        "user": {"name": "fake", "id": "fake"},
+        "roles": [{u'description': u'User Admin Role.',
+                u'id': u'3',
+                u'name': u'identity:user-admin'}],
+        }
 
 fake_identity_tenant_response = {"name": "fake", "id": "fake",
         "description": "fake", "enabled": True}
@@ -473,6 +479,9 @@ fake_identity_response = {u'access':
                              u'tenantId': u'000000'},
                             {u'publicURL': u'https://dfw.loadbalancers.api.rackspacecloud.com/v1.0/000000',
                              u'region': u'DFW',
+                             u'tenantId': u'000000'},
+                             {u'publicURL': u'https://syd.loadbalancers.api.rackspacecloud.com/v1.0/000000',
+                             u'region': u'SYD',
                              u'tenantId': u'000000'}],
              u'name': u'cloudLoadBalancers',
              u'type': u'rax:load-balancer'},
@@ -487,6 +496,10 @@ fake_identity_response = {u'access':
                             {u'internalURL': u'https://snet-storage101.ord1.clouddrive.com/v1/MossoCloudFS_ffffffff-ffff-ffff-ffff-ffffffffffff',
                              u'publicURL': u'https://storage101.ord1.clouddrive.com/v1/MossoCloudFS_ffffffff-ffff-ffff-ffff-ffffffffffff',
                              u'region': u'ORD',
+                             u'tenantId': u'MossoCloudFS_ffffffff-ffff-ffff-ffff-ffffffffffff'},
+                             {u'internalURL': u'https://snet-storage101.syd1.clouddrive.com/v1/MossoCloudFS_ffffffff-ffff-ffff-ffff-ffffffffffff',
+                             u'publicURL': u'https://storage101.ord1.clouddrive.com/v1/MossoCloudFS_ffffffff-ffff-ffff-ffff-ffffffffffff',
+                             u'region': u'SYD',
                              u'tenantId': u'MossoCloudFS_ffffffff-ffff-ffff-ffff-ffffffffffff'}],
              u'name': u'cloudFiles',
              u'type': u'object-store'},
@@ -501,7 +514,13 @@ fake_identity_response = {u'access':
                              u'tenantId': u'000000',
                              u'versionId': u'2',
                              u'versionInfo': u'https://ord.servers.api.rackspacecloud.com/v2',
-                             u'versionList': u'https://ord.servers.api.rackspacecloud.com/'}],
+                             u'versionList': u'https://ord.servers.api.rackspacecloud.com/'},
+                             {u'publicURL': u'https://syd.servers.api.rackspacecloud.com/v2/000000',
+                             u'region': u'SYD',
+                             u'tenantId': u'000000',
+                             u'versionId': u'2',
+                             u'versionInfo': u'https://syd.servers.api.rackspacecloud.com/v2',
+                             u'versionList': u'https://syd.servers.api.rackspacecloud.com/'}],
              u'name': u'cloudServersOpenStack',
              u'type': u'compute'},
             {u'endpoints': [{u'publicURL': u'https://dns.api.rackspacecloud.com/v1.0/000000',
@@ -510,6 +529,9 @@ fake_identity_response = {u'access':
              u'type': u'rax:dns'},
             {u'endpoints': [{u'publicURL': u'https://dfw.databases.api.rackspacecloud.com/v1.0/000000',
                              u'region': u'DFW',
+                             u'tenantId': u'000000'},
+                             {u'publicURL': u'https://syd.databases.api.rackspacecloud.com/v1.0/000000',
+                             u'region': u'SYD',
                              u'tenantId': u'000000'},
                             {u'publicURL': u'https://ord.databases.api.rackspacecloud.com/v1.0/000000',
                              u'region': u'ORD',
@@ -526,6 +548,9 @@ fake_identity_response = {u'access':
             {u'endpoints': [{u'publicURL': u'https://cdn1.clouddrive.com/v1/MossoCloudFS_ffffffff-ffff-ffff-ffff-ffffffffffff',
                              u'region': u'DFW',
                              u'tenantId': u'MossoCloudFS_ffffffff-ffff-ffff-ffff-ffffffffffff'},
+                             {u'publicURL': u'https://cdn1.clouddrive.com/v1/MossoCloudFS_ffffffff-ffff-ffff-ffff-ffffffffffff',
+                             u'region': u'SYD',
+                             u'tenantId': u'MossoCloudFS_ffffffff-ffff-ffff-ffff-ffffffffffff'},
                             {u'publicURL': u'https://cdn2.clouddrive.com/v1/MossoCloudFS_ffffffff-ffff-ffff-ffff-ffffffffffff',
                              u'region': u'ORD',
                              u'tenantId': u'MossoCloudFS_ffffffff-ffff-ffff-ffff-ffffffffffff'}],
@@ -540,7 +565,7 @@ u'token': {u'expires': u'2222-02-22T22:22:22.000-02:00',
     u'tenant': {u'id': u'000000', u'name': u'000000'}},
 u'user': {u'RAX-AUTH:defaultRegion': u'',
    u'id': u'123456',
-   u'name': u'someuser',
+   u'name': u'fakeuser',
    u'roles': [{u'description': u'User Admin Role.',
                u'id': u'3',
                u'name': u'identity:user-admin'}]}}}
@@ -557,8 +582,18 @@ class FakeIdentityResponse(FakeResponse):
             "endpoints": fake_identity_endpoints_response,
             }
 
-    def json(self):
+    @property
+    def content(self):
         return self.responses.get(self.response_type)
 
+    def json(self):
+        return self.content
+
     def read(self):
-        return json.dumps(fake_identity_response)
+        return json.dumps(self.content)
+
+_module_pth = os.path.dirname(pyrax.__file__)
+_img_path = os.path.join(_module_pth, "..", "tests", "unit", "python-logo.png")
+png_file = None
+with open(_img_path, "rb") as pfile:
+    png_file = pfile.read()
