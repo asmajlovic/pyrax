@@ -10,6 +10,7 @@ try:
     import eventlet.green.httplib as httplib
 except ImportError:
     import httplib
+import locale
 import math
 import os
 import re
@@ -510,8 +511,13 @@ class CFClient(object):
         oname = self._resolve_name(obj)
         obj_info = self.connection.head_object(cname, oname)
         # Need to convert last modified time to a datetime object.
+        # Times are returned in default locale format, so we need to read
+        # them as such, no matter what the locale setting may be.
         lm_str = obj_info["last-modified"]
+        orig_locale = locale.getlocale(locale.LC_TIME)
+        locale.setlocale(locale.LC_TIME, (None, None))
         tm_tuple = time.strptime(lm_str, HEAD_DATE_FORMAT)
+        locale.setlocale(locale.LC_TIME, orig_locale)
         dttm = datetime.datetime.fromtimestamp(time.mktime(tm_tuple))
         # Now convert it back to the format returned by GETting the object.
         dtstr = dttm.strftime(DATE_FORMAT)
@@ -1026,6 +1032,24 @@ class CFClient(object):
 
 
     @handle_swiftclient_exception
+    def list_container_subdirs(self, container, marker=None, limit=None,
+            prefix=None, delimiter=None, full_listing=False):
+        """
+        Return a list of StorageObjects representing the pseudo-subdirectories
+        in the specified container. You can use the marker and limit params to
+        handle pagination, and the prefix and delimiter params to filter the
+        objects returned.
+        """
+        cname = self._resolve_name(container)
+        hdrs, objs = self.connection.get_container(cname, marker=marker,
+                limit=limit, prefix=prefix, delimiter=delimiter,
+                full_listing=full_listing)
+        cont = self.get_container(cname)
+        return [StorageObject(self, container=cont, attdict=obj) for obj in objs
+                if obj.get("content_type") == "application/directory"]
+
+
+    @handle_swiftclient_exception
     def get_info(self):
         """
         Returns a tuple for the number of containers and total bytes in
@@ -1033,6 +1057,14 @@ class CFClient(object):
         """
         hdrs = self.connection.head_container("")
         return (hdrs["x-account-container-count"], hdrs["x-account-bytes-used"])
+
+
+    @handle_swiftclient_exception
+    def list(self, limit=None, marker=None, **parms):
+        """Returns a list of all container objects."""
+        hdrs, conts = self.connection.get_container("")
+        ret = [self.get_container(cont["name"]) for cont in conts]
+        return ret
 
 
     @handle_swiftclient_exception

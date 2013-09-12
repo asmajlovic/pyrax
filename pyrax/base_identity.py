@@ -56,10 +56,12 @@ class BaseAuth(object):
     authenticated = False
     user_agent = "pyrax"
     http_log_debug = False
+    _default_region = None
 
 
     def __init__(self, username=None, password=None, token=None,
             credential_file=None, region=None, timeout=None, verify_ssl=True):
+
         self.username = username
         self.password = password
         self.token = token
@@ -69,6 +71,7 @@ class BaseAuth(object):
         self.services = {}
         self.regions = set()
         self.verify_ssl = verify_ssl
+        self._auth_endpoint = None
 
 
     @property
@@ -83,10 +86,24 @@ class BaseAuth(object):
         return self._get_auth_endpoint()
 
 
+    @auth_endpoint.setter
+    def auth_endpoint(self, val):
+        self._auth_endpoint = val
+
+
     def _get_auth_endpoint(self):
         """Each subclass will have to implement its own method."""
         raise NotImplementedError("The _get_auth_endpoint() method must be "
                 "defined in Auth subclasses.")
+
+
+    def get_default_region(self):
+        """
+        In cases where the region has not been specified, return the value to
+        use. Subclasses may use information in the service catalog to determine
+        the appropriate default value.
+        """
+        return self._default_region
 
 
     def set_credentials(self, username, password=None, region=None,
@@ -180,7 +197,7 @@ class BaseAuth(object):
         Implements the default (keystone) behavior.
         """
         self.username = cfg.get("keystone", "username")
-        self.password = cfg.get("keystone", "password")
+        self.password = cfg.get("keystone", "password", raw=True)
         self.tenant_id = cfg.get("keystone", "tenant_id")
 
 
@@ -447,7 +464,7 @@ class BaseAuth(object):
         # NOTE: the OpenStack docs say that the name key in the following dict
         # is supposed to be 'username', but the service actually expects 'name'.
         data = {"user": {
-                "name": name,
+                "username": name,
                 "email": email,
                 "enabled": enabled,
                 }}

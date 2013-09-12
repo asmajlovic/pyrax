@@ -39,8 +39,11 @@ def assure_domain(fnc):
     @wraps(fnc)
     def _wrapped(self, domain, *args, **kwargs):
         if not isinstance(domain, CloudDNSDomain):
-            # Must be the ID
-            domain = self._manager.get(domain)
+            # Must be the ID or name. Try ID first:
+            try:
+                domain = self._manager.get(domain)
+            except exc.NotFound:
+                domain = self._manager.find(name=domain)
         return fnc(self, domain, *args, **kwargs)
     return _wrapped
 
@@ -271,6 +274,30 @@ class CloudDNSManager(BaseManager):
         self._reset_paging(service="all")
         self._timeout = DEFAULT_TIMEOUT
         self._delay = DEFAULT_DELAY
+
+
+    def _create_body(self, name, emailAddress, ttl=3600, comment=None,
+            subdomains=None, records=None):
+        """
+        Creates the appropriate dict for creating a new domain.
+        """
+        if subdomains is None:
+            subdomains = []
+        if records is None:
+            records = []
+        body = {"domains": [{
+                "name": name,
+                "emailAddress": emailAddress,
+                "ttl": ttl,
+                "comment": comment,
+                "subdomains": {
+                    "domains": subdomains
+                    },
+                "recordsList": {
+                    "records": records
+                    },
+                }]}
+        return body
 
 
     def _set_timeout(self, timeout):
@@ -987,30 +1014,6 @@ class CloudDNSClient(BaseClient):
                 uri_base="domains")
 
 
-    def _create_body(self, name, emailAddress, ttl=3600, comment=None,
-            subdomains=None, records=None):
-        """
-        Creates the appropriate dict for creating a new domain.
-        """
-        if subdomains is None:
-            subdomains = []
-        if records is None:
-            records = []
-        body = {"domains": [{
-                "name": name,
-                "emailAddress": emailAddress,
-                "ttl": ttl,
-                "comment": comment,
-                "subdomains": {
-                    "domains": subdomains
-                    },
-                "recordsList": {
-                    "records": records
-                    },
-                }]}
-        return body
-
-
     def set_timeout(self, timeout):
         """
         Sets the amount of time that calls will wait for a response from
@@ -1227,6 +1230,15 @@ class CloudDNSClient(BaseClient):
 
     #Create an alias, so that adding a single record is more intuitive
     add_record = add_records
+
+
+    @assure_domain
+    def get_record(self, domain, record):
+        """
+        Gets the full information for an existing record or record ID for the
+        specified domain.
+        """
+        return domain.get_record(record)
 
 
     @assure_domain

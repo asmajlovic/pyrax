@@ -32,7 +32,7 @@ class PyraxInitTest(unittest.TestCase):
         vers = pyrax.version.version
         pyrax.settings._settings = {
                 "default": {
-                    "auth_endpoint": None,
+                    "auth_endpoint": "DEFAULT_AUTH",
                     "region": "DFW",
                     "encoding": "utf-8",
                     "http_debug": False,
@@ -44,7 +44,7 @@ class PyraxInitTest(unittest.TestCase):
                     "user_agent": "pyrax/%s" % vers,
                 },
                 "alternate": {
-                    "auth_endpoint": None,
+                    "auth_endpoint": "ALT_AUTH",
                     "region": "NOWHERE",
                     "encoding": "utf-8",
                     "http_debug": False,
@@ -82,6 +82,25 @@ class PyraxInitTest(unittest.TestCase):
         testfunc()
         pyrax.identity.authenticated = False
         self.assertRaises(exc.NotAuthenticated, testfunc)
+
+    def test_settings_get(self):
+        def_ep = pyrax.get_setting("auth_endpoint", "default")
+        alt_ep = pyrax.get_setting("auth_endpoint", "alternate")
+        self.assertEqual(def_ep, "DEFAULT_AUTH")
+        self.assertEqual(alt_ep, "ALT_AUTH")
+
+    def test_settings_get_from_env(self):
+        pyrax.settings._settings = {"default": {}}
+        pyrax.settings.env_dct = {"identity_type": "fake"}
+        typ = utils.random_name()
+        ident = utils.random_name()
+        sav_env = os.environ
+        sav_imp = pyrax._import_identity
+        pyrax._import_identity = Mock(return_value=ident)
+        os.environ = {"fake": typ}
+        ret = pyrax.get_setting("identity_class")
+        pyrax._import_identity = sav_imp
+        os.environ = sav_env
 
     def test_read_config(self):
         dummy_cfg = fakes.fake_config_file
@@ -169,6 +188,15 @@ class PyraxInitTest(unittest.TestCase):
         pyrax.keyring_auth()
         self.assertTrue(pyrax.identity.authenticated)
 
+    def test_auth_with_token(self):
+        pyrax.authenticated = False
+        tok = utils.random_name()
+        tname = utils.random_name()
+        pyrax.auth_with_token(tok, tenant_name=tname)
+        self.assertTrue(pyrax.identity.authenticated)
+        self.assertEqual(pyrax.identity.token, tok)
+        self.assertEqual(pyrax.identity.tenant_name, tname)
+
     def test_clear_credentials(self):
         pyrax.set_credentials(self.username, self.password)
         # These next lines are required to test that clear_credentials
@@ -212,6 +240,7 @@ class PyraxInitTest(unittest.TestCase):
         new_region = "test"
         pyrax.set_default_region(new_region)
         self.assertEqual(pyrax.default_region, new_region)
+        pyrax.default_region = orig_region
 
     def test_set_identity_type_setting(self):
         savtyp = pyrax.get_setting("identity_type")
@@ -230,6 +259,27 @@ class PyraxInitTest(unittest.TestCase):
         self.assertEqual(ident.region, "DFW")
         pyrax.set_setting("region", "LON")
         self.assertEqual(ident.region, "LON")
+
+    def test_safe_region(self):
+        # Pass direct
+        reg = utils.random_name()
+        ret = pyrax._safe_region(reg)
+        self.assertEqual(reg, ret)
+        # From config setting
+        orig_reg = pyrax.get_setting("region")
+        reg = utils.random_name()
+        pyrax.set_setting("region", reg)
+        ret = pyrax._safe_region()
+        self.assertEqual(reg, ret)
+        # Identity default
+        pyrax.set_setting("region", None)
+        orig_defreg = pyrax.identity.get_default_region
+        reg = utils.random_name()
+        pyrax.identity.get_default_region = Mock(return_value=reg)
+        ret = pyrax._safe_region()
+        self.assertEqual(reg, ret)
+        pyrax.identity.get_default_region = orig_defreg
+        pyrax.set_setting("region", orig_reg)
 
     def test_make_agent_name(self):
         test_agent = "TEST"

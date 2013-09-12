@@ -18,6 +18,7 @@ import pyrax
 import pyrax.utils as utils
 import pyrax.exceptions as exc
 from pyrax import base_identity
+from pyrax.identity import rax_identity
 
 from tests.unit import fakes
 
@@ -173,7 +174,8 @@ class IdentityTest(unittest.TestCase):
     def test_set_credential_file(self):
         ident = self.rax_identity_class()
         user = "fakeuser"
-        key = "fakeapikey"
+        # Use percent signs in key to ensure it doesn't get interpolated.
+        key = "fake%api%key"
         ident.authenticate = Mock()
         with utils.SelfDeletingTempfile() as tmpname:
             with open(tmpname, "wb") as ff:
@@ -230,12 +232,23 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual(ident.username, user)
         self.assertEqual(ident.password, password)
 
-    def test_get_credentials(self):
+    def test_get_credentials_rax(self):
         ident = self.rax_identity_class(username=self.username,
                 password=self.password)
+        ident._creds_style = "apikey"
         creds = ident._get_credentials()
         user = creds["auth"]["RAX-KSKEY:apiKeyCredentials"]["username"]
         key = creds["auth"]["RAX-KSKEY:apiKeyCredentials"]["apiKey"]
+        self.assertEqual(self.username, user)
+        self.assertEqual(self.password, key)
+
+    def test_get_credentials_rax_password(self):
+        ident = self.rax_identity_class(username=self.username,
+                password=self.password)
+        ident._creds_style = "password"
+        creds = ident._get_credentials()
+        user = creds["auth"]["passwordCredentials"]["username"]
+        key = creds["auth"]["passwordCredentials"]["password"]
         self.assertEqual(self.username, user)
         self.assertEqual(self.password, key)
 
@@ -285,12 +298,8 @@ class IdentityTest(unittest.TestCase):
 
     def test_rax_endpoints(self):
         ident = self.rax_identity_class()
-        ident.region = "LON"
         ep = ident._get_auth_endpoint()
-        self.assertEqual(ep, ident.uk_auth_endpoint)
-        ident.region = "ORD"
-        ep = ident._get_auth_endpoint()
-        self.assertEqual(ep, ident.us_auth_endpoint)
+        self.assertEqual(ep, rax_identity.AUTH_ENDPOINT)
 
     def test_auth_token(self):
         for cls in self.id_classes.values():
@@ -501,7 +510,7 @@ class IdentityTest(unittest.TestCase):
             self.assertEqual(len(cargs), 2)
             self.assertEqual(cargs[0], ("users", ))
             data = cargs[1]["data"]["user"]
-            self.assertEqual(data["name"], fake_name)
+            self.assertEqual(data["username"], fake_name)
             self.assert_(fake_password in data.values())
 
     def test_create_user_not_authorized(self):

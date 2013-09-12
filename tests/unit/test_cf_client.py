@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import locale
 import os
+import random
 import unittest
 
 from mock import ANY, patch
@@ -379,6 +381,25 @@ class CF_ClientTest(unittest.TestCase):
                 [{"name": "o1"}, {"name": "o2"}])
         obj = client.get_object(self.cont_name, "o1")
         self.assertEqual(obj.name, "o1")
+
+    @patch('pyrax.cf_wrapper.client.Container', new=FakeContainer)
+    def test_get_object_locale(self):
+        client = self.client
+        orig_locale = locale.getlocale(locale.LC_TIME)
+        nonUS_locales = ("de_DE", "fr_FR", "hu_HU", "ja_JP", "nl_NL", "pl_PL",
+                "pt_BR", "pt_PT", "ro_RO", "ru_RU", "zh_CN", "zh_HK", "zh_TW")
+        new_locale = random.choice(nonUS_locales)
+        try:
+            locale.setlocale(locale.LC_TIME, new_locale)
+        except Exception:
+            # Travis CI seems to have a problem with setting locale, so
+            # just skip this.
+            return
+        client.connection.head_container = Mock()
+        client.connection.head_object = Mock(return_value=fake_attdict)
+        obj = client.get_object(self.cont_name, "fake")
+        self.assertEqual(obj.last_modified, "2013-01-01T01:02:03")
+        locale.setlocale(locale.LC_TIME, orig_locale)
 
     @patch('pyrax.cf_wrapper.client.Container', new=FakeContainer)
     def test_store_object(self):
@@ -797,6 +818,21 @@ class CF_ClientTest(unittest.TestCase):
         self.assert_("o2" in obj_names)
 
     @patch('pyrax.cf_wrapper.client.Container', new=FakeContainer)
+    def test_list_container_subdirs(self):
+        client = self.client
+        client.connection.head_container = Mock()
+        objs = [{"name": "subdir1", "content_type": "application/directory"},
+                {"name": "file1", "content_type": "text/plain"},
+                {"name": "subdir2", "content_type": "application/directory"},
+                {"name": "file2", "content_type": "text/plain"}]
+        client.connection.get_container = Mock(return_value=(None, objs))
+        ret = client.list_container_subdirs("fake")
+        self.assertEqual(len(ret), 2)
+        obj_names = [obj.name for obj in ret]
+        self.assert_("subdir1" in obj_names)
+        self.assert_("subdir2" in obj_names)
+
+    @patch('pyrax.cf_wrapper.client.Container', new=FakeContainer)
     def test_get_info(self):
         client = self.client
         dct = {"x-account-container-count": 2, "x-account-bytes-used": 1234}
@@ -825,6 +861,19 @@ class CF_ClientTest(unittest.TestCase):
         self.assertEqual(uri, example_uri)
 
     @patch('pyrax.cf_wrapper.client.Container', new=FakeContainer)
+    def test_list(self):
+        client = self.client
+        client.connection.head_container = Mock()
+        client.connection.get_container = Mock()
+        cont_list = [{"name": self.cont_name, "count": "2", "bytes": "12345"},
+                {"name": "anothercont", "count": "1", "bytes": "67890"}]
+        client.connection.get_container = Mock()
+        client.connection.get_container.return_value = ({}, cont_list)
+        resp = client.list()
+        self.assertEqual(len(resp), 2)
+        self.assert_(all([isinstance(cont, Container) for cont in resp]))
+
+    @patch('pyrax.cf_wrapper.client.Container', new=FakeContainer)
     def test_list_containers(self):
         client = self.client
         client.connection.get_container = Mock()
@@ -836,7 +885,6 @@ class CF_ClientTest(unittest.TestCase):
         self.assertEqual(len(resp), 2)
         self.assert_(self.cont_name in resp)
         self.assert_("anothercont" in resp)
-
 
     @patch('pyrax.cf_wrapper.client.Container', new=FakeContainer)
     def test_list_containers_info(self):

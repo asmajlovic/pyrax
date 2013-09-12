@@ -3,10 +3,13 @@
 
 import ConfigParser
 
+import pyrax
 from pyrax.base_identity import BaseAuth
 from pyrax.base_identity import User
 import pyrax.exceptions as exc
 import pyrax.utils as utils
+
+AUTH_ENDPOINT = "https://identity.api.rackspacecloud.com/v2.0/"
 
 
 class RaxIdentity(BaseAuth):
@@ -14,34 +17,54 @@ class RaxIdentity(BaseAuth):
     This class handles all of the authentication requirements for working
     with the Rackspace Cloud.
     """
-    us_auth_endpoint = "https://identity.api.rackspacecloud.com/v2.0/"
-    uk_auth_endpoint = "https://lon.identity.api.rackspacecloud.com/v2.0/"
+    _auth_endpoint = None
+    _creds_style = "apikey"
 
 
     def _get_auth_endpoint(self):
-        if self.region and self.region.upper() in ("LON", ):
-            return self.uk_auth_endpoint
-        return self.us_auth_endpoint
+        return self._auth_endpoint or AUTH_ENDPOINT
 
 
     def _read_credential_file(self, cfg):
+        """
+        Parses the credential file with Rackspace-specific labels.
+        """
         self.username = cfg.get("rackspace_cloud", "username")
         try:
-            self.password = cfg.get("rackspace_cloud", "api_key")
+            self.password = cfg.get("rackspace_cloud", "api_key", raw=True)
         except ConfigParser.NoOptionError as e:
             # Allow either the use of either 'api_key' or 'password'.
-            self.password = cfg.get("rackspace_cloud", "password")
+            self.password = cfg.get("rackspace_cloud", "password", raw=True)
 
 
     def _get_credentials(self):
         """
-        Returns the current credentials in the format expected by
-        the authentication service. Note that Rackspace credentials
-        expect 'api_key' instead of 'password'.
+        Returns the current credentials in the format expected by the
+        authentication service. Note that by default Rackspace credentials
+        expect 'api_key' instead of 'password'. However, if authentication
+        fails, return the creds in standard password format, in case they are
+        using a username / password combination.
         """
-        return {"auth": {"RAX-KSKEY:apiKeyCredentials":
-                {"username": "%s" % self.username,
-                "apiKey": "%s" % self.password}}}
+        if self._creds_style == "apikey":
+            return {"auth": {"RAX-KSKEY:apiKeyCredentials":
+                    {"username": "%s" % self.username,
+                    "apiKey": "%s" % self.password}}}
+        else:
+            # Return in the default password-style
+            return super(RaxIdentity, self)._get_credentials()
+
+
+    def authenticate(self):
+        """
+        If the user's credentials include an API key, the default behavior will
+        work. But if they are using a password, the initial attempt will fail,
+        so try again, but this time using the standard password format.
+        """
+        try:
+            super(RaxIdentity, self).authenticate()
+        except exc.AuthenticationFailed:
+            self._creds_style = "password"
+            super(RaxIdentity, self).authenticate()
 
 
     def auth_with_token(self, token, tenant_id=None, tenant_name=None):
@@ -79,7 +102,9 @@ class RaxIdentity(BaseAuth):
         """Gets the authentication information from the returned JSON."""
         super(RaxIdentity, self)._parse_response(resp)
         user = resp["access"]["user"]
-        self.user["default_region"] = user["RAX-AUTH:defaultRegion"]
+        defreg = user.get("RAX-AUTH:defaultRegion")
+        if defreg:
+            self._default_region = defreg
 
 
     def find_user_by_name(self, name):
@@ -112,6 +137,9 @@ class RaxIdentity(BaseAuth):
 
     def update_user(self, user, email=None, username=None,
             uid=None, defaultRegion=None, enabled=None):
+        """
+        Allows you to update settings for a given user.
+        """
         user_id = utils.get_id(user)
         uri = "users/%s" % user_id
         upd = {"id": user_id}

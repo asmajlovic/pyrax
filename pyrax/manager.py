@@ -82,17 +82,37 @@ class BaseManager(object):
         return self._get(uri)
 
 
-    def create(self, name, return_none=False, return_raw=False,
-            return_response=False, *args, **kwargs):
+    def create(self, name, *args, **kwargs):
         """
-        Subclasses need to implement the _create_body() method
-        to return a dict that will be used for the API request
-        body.
+        Subclasses need to implement the _create_body() method to return a dict
+        that will be used for the API request body.
+
+        For cases where no response is returned from the API on creation, pass
+        `return_none=True` so that the _create method doesn't expect one.
+
+        For cases where you do not want the _create method to attempt to parse
+        the response, but instead have it returned directly, pass
+        `return_raw=True`.
+
+        For cases where the API returns information in the response and not the
+        response_body, pass `return_response=True`.
         """
-        body = self.api._create_body(name, *args, **kwargs)
+        return_none = kwargs.pop("return_none", False)
+        return_raw = kwargs.pop("return_raw", False)
+        return_response = kwargs.pop("return_response", False)
+        body = self._create_body(name, *args, **kwargs)
         return self._create("/%s" % self.uri_base, body,
                 return_none=return_none, return_raw=return_raw,
                 return_response=return_response)
+
+
+    def _create_body(self, name, *args, **kwargs):
+        """
+        Creates the dictionary that is passed in the POST call to create a new
+        resource. Must be defined in each subclass.
+        """
+        raise NotImplementedError("Managers must define their _create_body() "
+                "method.")
 
 
     def delete(self, item):
