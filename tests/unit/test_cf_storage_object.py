@@ -71,10 +71,10 @@ class CF_StorageObjectTest(unittest.TestCase):
         pyrax.connect_to_cloud_blockstorage = octcbs
 
     def test_init(self):
-        cname = utils.random_name()
-        oname = utils.random_name()
-        ctype = utils.random_name()
-        etag = utils.random_name()
+        cname = utils.random_unicode()
+        oname = utils.random_unicode()
+        ctype = utils.random_unicode()
+        etag = utils.random_unicode()
         tbytes = random.randint(0, 1000)
         lmod = random.randint(0, 1000)
         cont = FakeContainer(self.client, cname, 0, 0)
@@ -131,7 +131,7 @@ class CF_StorageObjectTest(unittest.TestCase):
     def test_download(self):
         obj = self.storage_object
         obj.client.download_object = Mock()
-        dname = utils.random_name()
+        dname = utils.random_unicode()
         stru = random.choice((True, False))
         obj.download(dname, structure=stru)
         obj.client.download_object.assert_called_once_with(obj.container, obj,
@@ -170,7 +170,17 @@ class CF_StorageObjectTest(unittest.TestCase):
         obj.client.connection.head_object = Mock(return_value={})
         obj.set_metadata({"newkey": "newval"})
         obj.client.connection.post_object.assert_called_with(obj.container.name,
-                obj.name, {"x-object-meta-newkey": "newval"},
+                obj.name, {"X-Object-Meta-newkey": "newval"},
+                response_dict=None)
+
+    def test_set_metadata_prefix(self):
+        obj = self.storage_object
+        obj.client.connection.post_object = Mock()
+        obj.client.connection.head_object = Mock(return_value={})
+        prefix = utils.random_unicode()
+        obj.set_metadata({"newkey": "newval"}, prefix=prefix)
+        obj.client.connection.post_object.assert_called_with(obj.container.name,
+                obj.name, {"%snewkey" % prefix: "newval"},
                 response_dict=None)
 
     def test_remove_metadata_key(self):
@@ -180,6 +190,28 @@ class CF_StorageObjectTest(unittest.TestCase):
         obj.remove_metadata_key("newkey")
         obj.client.connection.post_object.assert_called_with(obj.container.name,
                 obj.name, {}, response_dict=None)
+
+    def test_copy(self):
+        obj = self.storage_object
+        cont = obj.container
+        cont.copy_object = Mock()
+        new_cont = utils.random_unicode()
+        new_name = utils.random_unicode()
+        extra_info = utils.random_unicode()
+        obj.copy(new_cont, new_obj_name=new_name, extra_info=extra_info)
+        cont.copy_object.assert_called_once_with(obj, new_cont,
+                new_obj_name=new_name, extra_info=extra_info)
+
+    def test_move(self):
+        obj = self.storage_object
+        cont = obj.container
+        cont.move_object = Mock()
+        new_cont = utils.random_unicode()
+        new_name = utils.random_unicode()
+        extra_info = utils.random_unicode()
+        obj.move(new_cont, new_obj_name=new_name, extra_info=extra_info)
+        cont.move_object.assert_called_once_with(obj, new_cont,
+                new_obj_name=new_name, extra_info=extra_info)
 
     def test_change_content_type(self):
         obj = self.storage_object
@@ -202,8 +234,7 @@ class CF_StorageObjectTest(unittest.TestCase):
         secs = random.randint(1, 1000)
         obj.delete_in_seconds(seconds=secs)
         obj.client.connection.post_object.assert_called_with(obj.container.name,
-                obj.name, headers={'X-Delete-After': secs},
-                response_dict=None)
+                obj.name, {'X-Delete-After': "%s" % secs}, response_dict=None)
 
     def test_repr(self):
         obj = self.storage_object

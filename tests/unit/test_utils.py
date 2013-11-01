@@ -79,7 +79,7 @@ class UtilsTest(unittest.TestCase):
         self.assertEqual(expected, received)
 
     def test_get_checksum_from_binary(self):
-#        test = utils.random_name()
+#        test = utils.random_unicode()
 #        test = open("tests/unit/python-logo.png", "rb").read()
         test = fakes.png_file
         md = hashlib.md5()
@@ -101,9 +101,9 @@ class UtilsTest(unittest.TestCase):
                 received = utils.get_checksum(testfile)
         self.assertEqual(expected, received)
 
-    def test_random_name(self):
+    def test_random_unicode(self):
         testlen = random.randint(50, 500)
-        nm = utils.random_name(testlen)
+        nm = utils.random_unicode(testlen)
         self.assertEqual(len(nm), testlen)
 
     def test_folder_size_bad_folder(self):
@@ -158,6 +158,17 @@ class UtilsTest(unittest.TestCase):
         utils.add_method(obj, fake_method)
         self.assertTrue(hasattr(obj, "fake_method"))
         self.assertTrue(callable(obj.fake_method))
+
+    def test_case_insensitive_update(self):
+        k1 = utils.random_ascii()
+        k2 = utils.random_ascii()
+        k2up = k2.upper()
+        k3 = utils.random_ascii()
+        d1 = {k1: "fake", k2up: "fake"}
+        d2 = {k2: "NEW", k3: "NEW"}
+        expected = {k1: "fake", k2up: "NEW", k3: "NEW"}
+        utils.case_insensitive_update(d1, d2)
+        self.assertEqual(d1, expected)
 
     def test_env(self):
         args = ("foo", "bar")
@@ -238,13 +249,13 @@ class UtilsTest(unittest.TestCase):
         sav = utils.wait_until
         utils.wait_until = Mock()
         obj = fakes.FakeEntity()
-        att = utils.random_name()
-        desired = utils.random_name()
-        callback = utils.random_name()
-        interval = utils.random_name()
-        attempts = utils.random_name()
-        verbose = utils.random_name()
-        verbose_atts = utils.random_name()
+        att = utils.random_unicode()
+        desired = utils.random_unicode()
+        callback = utils.random_unicode()
+        interval = utils.random_unicode()
+        attempts = utils.random_unicode()
+        verbose = utils.random_unicode()
+        verbose_atts = utils.random_unicode()
         utils.wait_for_build(obj, att, desired, callback, interval, attempts,
                 verbose, verbose_atts)
         utils.wait_until.assert_called_once_with(obj, att, desired,
@@ -299,13 +310,29 @@ class UtilsTest(unittest.TestCase):
         self.assertEqual(utils.iso_time_string(dt, show_tzinfo=False),
                 "1999-12-31T23:59:59")
 
+    def test_rfc2822_format(self):
+        now = datetime.datetime.now()
+        now_year = str(now.year)
+        fmtd = utils.rfc2822_format(now)
+        self.assertTrue(now_year in fmtd)
+
+    def test_rfc2822_format_str(self):
+        now = str(datetime.datetime.now())
+        fmtd = utils.rfc2822_format(now)
+        self.assertEqual(fmtd, now)
+
+    def test_rfc2822_format_fail(self):
+        now = {}
+        fmtd = utils.rfc2822_format(now)
+        self.assertEqual(fmtd, now)
+
     def test_match_pattern(self):
         ignore_pat = "*.bad"
         self.assertTrue(utils.match_pattern("some.bad", ignore_pat))
         self.assertFalse(utils.match_pattern("some.good", ignore_pat))
 
     def test_get_id(self):
-        target = utils.random_name()
+        target = utils.random_unicode()
 
         class ObjWithID(object):
             id = target
@@ -317,7 +344,7 @@ class UtilsTest(unittest.TestCase):
         self.assertEqual(utils.get_id(plain), plain)
 
     def test_get_name(self):
-        nm = utils.random_name()
+        nm = utils.random_unicode()
 
         class ObjWithName(object):
             name = nm
@@ -327,14 +354,29 @@ class UtilsTest(unittest.TestCase):
         self.assertEqual(utils.get_name(obj.name), nm)
         self.assertRaises(exc.MissingName, utils.get_name, object())
 
+    def test_params_to_dict(self):
+        dct = {}
+        k1 = utils.random_unicode()
+        k2 = utils.random_unicode()
+        k3 = utils.random_unicode()
+        k4 = utils.random_unicode()
+        v1 = utils.random_unicode()
+        v2 = utils.random_unicode()
+        v3 = utils.random_unicode()
+        local = {k1: v1, k2: v2, k3: v3}
+        params = [k2, k3, k4]
+        expected = {k2: v2, k3: v3}
+        utils.params_to_dict(params, dct, local)
+        self.assertEqual(dct, expected)
+
     def test_import_class(self):
         cls_string = "tests.unit.fakes.FakeManager"
         ret = utils.import_class(cls_string)
         self.assertTrue(ret is fakes.FakeManager)
 
     def test_update_exc(self):
-        msg1 = utils.random_name()
-        msg2 = utils.random_name()
+        msg1 = utils.random_unicode()
+        msg2 = utils.random_unicode()
         err = exc.PyraxException(400)
         err.message = msg1
         sep = random.choice(("!", "@", "#", "$"))
