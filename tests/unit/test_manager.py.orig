@@ -87,10 +87,14 @@ class ManagerTest(unittest.TestCase):
         mgr.uri_base = "test"
         mgr._create_body = Mock(return_value="body")
 <<<<<<< HEAD
+<<<<<<< HEAD
         nm = utils.random_name()
 =======
         nm = utils.random_unicode()
 >>>>>>> upstream/master
+=======
+        nm = utils.random_unicode()
+>>>>>>> upstream/working
         mgr.create(nm)
         mgr._create.assert_called_once_with("/test", "body", return_none=False,
                 return_raw=False, return_response=False)

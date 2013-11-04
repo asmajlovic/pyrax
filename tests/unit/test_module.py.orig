@@ -93,12 +93,17 @@ class PyraxInitTest(unittest.TestCase):
         pyrax.settings._settings = {"default": {}}
         pyrax.settings.env_dct = {"identity_type": "fake"}
 <<<<<<< HEAD
+<<<<<<< HEAD
         typ = utils.random_name()
         ident = utils.random_name()
 =======
         typ = utils.random_unicode()
         ident = utils.random_unicode()
 >>>>>>> upstream/master
+=======
+        typ = utils.random_unicode()
+        ident = utils.random_unicode()
+>>>>>>> upstream/working
         sav_env = os.environ
         sav_imp = pyrax._import_identity
         pyrax._import_identity = Mock(return_value=ident)

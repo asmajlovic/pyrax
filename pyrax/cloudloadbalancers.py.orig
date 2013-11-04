@@ -472,17 +472,23 @@ class CloudLoadBalancerManager(BaseManager):
         Used to create the dict required to create a load balancer instance.
         """
 <<<<<<< HEAD
+<<<<<<< HEAD
         required = (nodes, virtual_ips, port, protocol)
         if not all(required):
             raise exc.MissingLoadBalancerParameters("Load Balancer creation "
                     "requires at least one node, one virtual IP, "
                     "a protocol, and a port.")
 =======
+=======
+>>>>>>> upstream/working
         required = (virtual_ips, port, protocol)
         if not all(required):
             raise exc.MissingLoadBalancerParameters("Load Balancer creation "
                 "requires at least one virtual IP, a protocol, and a port.")
+<<<<<<< HEAD
 >>>>>>> upstream/master
+=======
+>>>>>>> upstream/working
         nodes = utils.coerce_string_to_list(nodes)
         virtual_ips = utils.coerce_string_to_list(virtual_ips)
         bad_conditions = [node.condition for node in nodes

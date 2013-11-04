@@ -309,10 +309,14 @@ class CloudDNSTest(unittest.TestCase):
     def test_create_body(self):
         mgr = self.client._manager
 <<<<<<< HEAD
+<<<<<<< HEAD
         fake_name = utils.random_name()
 =======
         fake_name = utils.random_unicode()
 >>>>>>> upstream/master
+=======
+        fake_name = utils.random_unicode()
+>>>>>>> upstream/working
         body = mgr._create_body(fake_name, "fake@fake.com")
         self.assertEqual(body["domains"][0]["name"], fake_name)
 
@@ -634,12 +638,17 @@ class CloudDNSTest(unittest.TestCase):
         mgr = clt._manager
         dom = self.domain
 <<<<<<< HEAD
+<<<<<<< HEAD
         nm = utils.random_name()
         rec_id = utils.random_name()
 =======
         nm = utils.random_unicode()
         rec_id = utils.random_unicode()
 >>>>>>> upstream/master
+=======
+        nm = utils.random_unicode()
+        rec_id = utils.random_unicode()
+>>>>>>> upstream/working
         rec_dict = {"id": rec_id, "name": nm}
         mgr.api.method_get = Mock(return_value=(None, rec_dict))
         ret = clt.get_record(dom, rec_id)

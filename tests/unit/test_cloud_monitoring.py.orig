@@ -1472,18 +1472,24 @@ class CloudMonitoringTest(unittest.TestCase):
     def test_clt_create_body(self):
         mgr = self.client._entity_manager
 <<<<<<< HEAD
+<<<<<<< HEAD
         label = utils.random_name()
         name = utils.random_name()
         agent = utils.random_name()
         ip_addresses = utils.random_name()
         metadata = utils.random_name()
 =======
+=======
+>>>>>>> upstream/working
         label = utils.random_unicode()
         name = utils.random_unicode()
         agent = utils.random_unicode()
         ip_addresses = utils.random_unicode()
         metadata = utils.random_unicode()
+<<<<<<< HEAD
 >>>>>>> upstream/master
+=======
+>>>>>>> upstream/working
         expected = {"label": label, "ip_addresses": ip_addresses,
                 "agent_id": agent, "metadata": metadata}
         ret = mgr._create_body(name, label=label, agent=agent,

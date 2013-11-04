@@ -285,18 +285,26 @@ class FakeDatabaseInstance(CloudDatabaseInstance):
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 class FakeDatabaseManager(CloudDNSManager):
 =======
 class FakeDatabaseManager(CloudDatabaseManager):
 >>>>>>> upstream/master
+=======
+class FakeDatabaseManager(CloudDatabaseManager):
+>>>>>>> upstream/working
     def __init__(self, api=None, *args, **kwargs):
         if api is None:
             api = FakeDatabaseClient()
         super(FakeDatabaseManager, self).__init__(api, *args, **kwargs)
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
         self.uri_base = "instances"
 >>>>>>> upstream/master
+=======
+        self.uri_base = "instances"
+>>>>>>> upstream/working
 
 
 class FakeDatabaseClient(CloudDatabaseClient):
@@ -319,15 +327,9 @@ class FakeBlockStorageManager(CloudBlockStorageManager):
         super(FakeBlockStorageManager, self).__init__(api, *args, **kwargs)
 
 
-class FakeBlockStorageManager(CloudBlockStorageManager):
-    def __init__(self, api=None, *args, **kwargs):
-        if api is None:
-            api = FakeBlockStorageClient()
-        super(FakeBlockStorageManager, self).__init__(api, *args, **kwargs)
-
-
 class FakeBlockStorageVolume(CloudBlockStorageVolume):
     def __init__(self, *args, **kwargs):
+<<<<<<< HEAD
 <<<<<<< HEAD
         volname = utils.random_name(8)
         self.id = utils.random_name()
@@ -335,6 +337,10 @@ class FakeBlockStorageVolume(CloudBlockStorageVolume):
         volname = utils.random_unicode(8)
         self.id = utils.random_unicode()
 >>>>>>> upstream/master
+=======
+        volname = utils.random_unicode(8)
+        self.id = utils.random_unicode()
+>>>>>>> upstream/working
         self.manager = FakeBlockStorageManager()
         self._nova_volumes = FakeNovaVolumeClient()
 

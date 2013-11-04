@@ -24,12 +24,17 @@ It is important to remember that Auto Scale does not configure anything within a
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 ## Using Autoscaling in pyrax
 Once you have authenticated, you can reference the Autoscaling service via `pyrax.autoscale`. That is a lot to type over and over in your code, so it is easier if you include the following line at the beginning of your code:
 =======
 ## Using Auto Scale in pyrax
 Once you have authenticated, you can reference the Auto Scale service via `pyrax.autoscale`. That is a lot to type again and again in your code, so it is easier if you include the following line at the beginning of your code:
 >>>>>>> upstream/master
+=======
+## Using Auto Scale in pyrax
+Once you have authenticated, you can reference the Auto Scale service via `pyrax.autoscale`. That is a lot to type again and again in your code, so it is easier if you include the following line at the beginning of your code:
+>>>>>>> upstream/working
 
     au = pyrax.autoscale
 
