@@ -749,11 +749,16 @@ class ScalingGroupManager(BaseManager):
             launch_config_type, server_name, image, flavor, disk_config=None,
             metadata=None, personality=None, networks=None,
 <<<<<<< HEAD
+<<<<<<< HEAD
             load_balancers=None, scaling_policies=None):
 =======
             load_balancers=None, scaling_policies=None, group_metadata=None,
             key_name=None):
 >>>>>>> upstream/master
+=======
+            load_balancers=None, scaling_policies=None, group_metadata=None,
+            key_name=None):
+>>>>>>> upstream/working
         """
         Used to create the dict required to create any of the following:
             A Scaling Group
@@ -768,6 +773,7 @@ class ScalingGroupManager(BaseManager):
             # Default to ServiceNet only
             networks = [{"uuid": SERVICE_NET_ID}]
 <<<<<<< HEAD
+<<<<<<< HEAD
         if load_balancers is None:
             load_balancers = []
         if scaling_policies is None:
@@ -778,6 +784,8 @@ class ScalingGroupManager(BaseManager):
             "imageRef": utils.get_id(image),
         }
 =======
+=======
+>>>>>>> upstream/working
         if scaling_policies is None:
             scaling_policies = []
         group_config = self._create_group_config_body(name, cooldown,
@@ -819,7 +827,10 @@ class ScalingGroupManager(BaseManager):
                 "name": server_name,
                 "imageRef": utils.get_id(image),
                 }
+<<<<<<< HEAD
 >>>>>>> upstream/master
+=======
+>>>>>>> upstream/working
         if metadata is not None:
             server_args["metadata"] = metadata
         if personality is not None:
@@ -828,6 +839,7 @@ class ScalingGroupManager(BaseManager):
             server_args["networks"] = networks
         if disk_config is not None:
             server_args["OS-DCF:diskConfig"] = disk_config
+<<<<<<< HEAD
 <<<<<<< HEAD
         load_balancer_args = self._resolve_lbs(load_balancers)
         body = {"groupConfiguration": {
@@ -848,6 +860,8 @@ class ScalingGroupManager(BaseManager):
         body
         return body
 =======
+=======
+>>>>>>> upstream/working
         if key_name is not None:
             server_args["key_name"] = key_name
         if load_balancers is None:
@@ -856,7 +870,10 @@ class ScalingGroupManager(BaseManager):
         return {"type": launch_config_type,
                 "args": {"server": server_args,
                          "loadBalancers": load_balancer_args}}
+<<<<<<< HEAD
 >>>>>>> upstream/master
+=======
+>>>>>>> upstream/working
 
 
 

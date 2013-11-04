@@ -171,18 +171,24 @@ class CF_ContainerTest(unittest.TestCase):
         clt = cont.client
         clt.list_container_subdirs = Mock()
 <<<<<<< HEAD
+<<<<<<< HEAD
         marker = utils.random_name()
         limit = utils.random_name()
         prefix = utils.random_name()
         delimiter = utils.random_name()
         full_listing = utils.random_name()
 =======
+=======
+>>>>>>> upstream/working
         marker = utils.random_unicode()
         limit = utils.random_unicode()
         prefix = utils.random_unicode()
         delimiter = utils.random_unicode()
         full_listing = utils.random_unicode()
+<<<<<<< HEAD
 >>>>>>> upstream/master
+=======
+>>>>>>> upstream/working
         cont.list_subdirs(marker=marker, limit=limit, prefix=prefix,
                 delimiter=delimiter, full_listing=full_listing)
         clt.list_container_subdirs.assert_called_once_with(cont.name,

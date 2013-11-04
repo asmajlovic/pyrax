@@ -893,10 +893,14 @@ class CloudDatabasesTest(unittest.TestCase):
     def test_create_body_db(self):
         mgr = self.instance._database_manager
 <<<<<<< HEAD
+<<<<<<< HEAD
         nm = utils.random_name()
 =======
         nm = utils.random_unicode()
 >>>>>>> upstream/master
+=======
+        nm = utils.random_unicode()
+>>>>>>> upstream/working
         ret = mgr._create_body(nm, character_set="CS", collate="CO")
         expected = {"databases": [
                 {"name": nm,
@@ -909,17 +913,23 @@ class CloudDatabasesTest(unittest.TestCase):
         inst = self.instance
         mgr = inst._user_manager
 <<<<<<< HEAD
+<<<<<<< HEAD
         nm = utils.random_name()
         pw = utils.random_name()
         ret = mgr._create_body(nm, password=pw, database_names=[])
 =======
+=======
+>>>>>>> upstream/working
         nm = utils.random_unicode()
         host = utils.random_unicode()
         pw = utils.random_unicode()
         dbnames = [utils.random_unicode(), utils.random_unicode()]
         ret = mgr._create_body(nm, host=host, password=pw,
                 database_names=dbnames)
+<<<<<<< HEAD
 >>>>>>> upstream/master
+=======
+>>>>>>> upstream/working
         expected = {"users": [
                 {"name": nm,
                 "password": pw,

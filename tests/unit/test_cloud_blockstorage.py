@@ -141,12 +141,17 @@ class CloudBlockStorageTest(unittest.TestCase):
         vol = self.volume
         vol.manager.create_snapshot = Mock()
 <<<<<<< HEAD
+<<<<<<< HEAD
         name = utils.random_name()
         desc = utils.random_name()
 =======
         name = utils.random_unicode()
         desc = utils.random_unicode()
 >>>>>>> upstream/master
+=======
+        name = utils.random_unicode()
+        desc = utils.random_unicode()
+>>>>>>> upstream/working
         vol.create_snapshot(name=name, description=desc, force=False)
         vol.manager.create_snapshot.assert_called_once_with(volume=vol,
                 name=name, description=desc, force=False)
@@ -303,12 +308,17 @@ class CloudBlockStorageTest(unittest.TestCase):
         clt = self.client
         vol = self.volume
 <<<<<<< HEAD
+<<<<<<< HEAD
         name = utils.random_name()
         description = utils.random_name()
 =======
         name = utils.random_unicode()
         description = utils.random_unicode()
 >>>>>>> upstream/master
+=======
+        name = utils.random_unicode()
+        description = utils.random_unicode()
+>>>>>>> upstream/working
         clt._snapshot_manager.create = Mock()
         clt.create_snapshot(vol, name=name, description=description,
                 force=True)

@@ -366,10 +366,14 @@ def wait_for_build(obj, att=None, desired=None, callback=None, interval=None,
     """
     att = att or "status"
 <<<<<<< HEAD
+<<<<<<< HEAD
     desired = desired or ["ACTIVE", "ERROR", "available"]
 =======
     desired = desired or ["ACTIVE", "ERROR", "available", "COMPLETED"]
 >>>>>>> upstream/master
+=======
+    desired = desired or ["ACTIVE", "ERROR", "available", "COMPLETED"]
+>>>>>>> upstream/working
     interval = interval or 20
     attempts = attempts or 0
     verbose_atts = verbose_atts or "progress"

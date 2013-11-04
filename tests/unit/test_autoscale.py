@@ -983,12 +983,17 @@ class AutoscaleTest(unittest.TestCase):
         sg = self.scaling_group
         mgr = sg.manager
 <<<<<<< HEAD
+<<<<<<< HEAD
         key = utils.random_name()
         val = utils.random_name()
 =======
         key = utils.random_unicode()
         val = utils.random_unicode()
 >>>>>>> upstream/master
+=======
+        key = utils.random_unicode()
+        val = utils.random_unicode()
+>>>>>>> upstream/working
         lb_dict = {key: val}
         ret = mgr._resolve_lbs(lb_dict)
         self.assertEqual(ret, [lb_dict])
@@ -999,11 +1004,15 @@ class AutoscaleTest(unittest.TestCase):
         clb = fakes.FakeLoadBalancer(None, {})
         ret = mgr._resolve_lbs(clb)
 <<<<<<< HEAD
+<<<<<<< HEAD
         expected = {"loadBalancerId": clb.id,
                 "port": clb.port}
 =======
         expected = {"loadBalancerId": clb.id, "port": clb.port}
 >>>>>>> upstream/master
+=======
+        expected = {"loadBalancerId": clb.id, "port": clb.port}
+>>>>>>> upstream/working
         self.assertEqual(ret, [expected])
 
     def test_mgr_resolve_lbs_id(self):
@@ -1019,11 +1028,15 @@ class AutoscaleTest(unittest.TestCase):
         pyrax.cloud_loadbalancers = PyrCLB()
         ret = mgr._resolve_lbs("fakeid")
 <<<<<<< HEAD
+<<<<<<< HEAD
         expected = {"loadBalancerId": clb.id,
                 "port": clb.port}
 =======
         expected = {"loadBalancerId": clb.id, "port": clb.port}
 >>>>>>> upstream/master
+=======
+        expected = {"loadBalancerId": clb.id, "port": clb.port}
+>>>>>>> upstream/working
         self.assertEqual(ret, [expected])
         pyrax.cloud_loadbalancers = sav
 
@@ -1038,6 +1051,7 @@ class AutoscaleTest(unittest.TestCase):
         sg = self.scaling_group
         mgr = sg.manager
 <<<<<<< HEAD
+<<<<<<< HEAD
         name = utils.random_name()
         cooldown = utils.random_name()
         min_entities = utils.random_name()
@@ -1047,6 +1061,8 @@ class AutoscaleTest(unittest.TestCase):
         server_name = utils.random_name()
         image = utils.random_name()
 =======
+=======
+>>>>>>> upstream/working
         name = utils.random_unicode()
         cooldown = utils.random_unicode()
         min_entities = utils.random_unicode()
@@ -1057,18 +1073,26 @@ class AutoscaleTest(unittest.TestCase):
         image = utils.random_unicode()
         group_metadata = utils.random_unicode()
         key_name = utils.random_unicode()
+<<<<<<< HEAD
 >>>>>>> upstream/master
+=======
+>>>>>>> upstream/working
         expected = {
                 "groupConfiguration": {
                     "cooldown": cooldown,
                     "maxEntities": max_entities,
                     "minEntities": min_entities,
 <<<<<<< HEAD
+<<<<<<< HEAD
                     "name": name},
 =======
                     "name": name,
                     "metadata": group_metadata},
 >>>>>>> upstream/master
+=======
+                    "name": name,
+                    "metadata": group_metadata},
+>>>>>>> upstream/working
                 "launchConfiguration": {
                     "args": {
                         "loadBalancers": [],
@@ -1080,11 +1104,16 @@ class AutoscaleTest(unittest.TestCase):
                             "name": server_name,
                             "networks": [{"uuid": SERVICE_NET_ID}],
 <<<<<<< HEAD
+<<<<<<< HEAD
                             "personality": []}
 =======
                             "personality": [],
                             "key_name": key_name}
 >>>>>>> upstream/master
+=======
+                            "personality": [],
+                            "key_name": key_name}
+>>>>>>> upstream/working
                         },
                     "type": launch_config_type},
                     "scalingPolicies": []}
@@ -1094,11 +1123,16 @@ class AutoscaleTest(unittest.TestCase):
                 launch_config_type, server_name, image, flavor,
                 disk_config=None, metadata=None, personality=None,
 <<<<<<< HEAD
+<<<<<<< HEAD
                 networks=None, load_balancers=None, scaling_policies=None)
 =======
                 networks=None, load_balancers=None, scaling_policies=None,
                 group_metadata=group_metadata, key_name=key_name)
 >>>>>>> upstream/master
+=======
+                networks=None, load_balancers=None, scaling_policies=None,
+                group_metadata=group_metadata, key_name=key_name)
+>>>>>>> upstream/working
         self.assertEqual(ret, expected)
 
     def test_policy_init(self):

@@ -104,7 +104,10 @@ class CloudDatabaseManager(BaseManager):
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> upstream/working
     def create_backup(self, instance, name, description=None):
         """
         Creates a backup of the specified instance, giving it the specified
@@ -161,7 +164,10 @@ class CloudDatabaseManager(BaseManager):
 
 
 
+<<<<<<< HEAD
 >>>>>>> upstream/master
+=======
+>>>>>>> upstream/working
 class CloudDatabaseDatabaseManager(BaseManager):
     """
     This class manages communication with databases on Cloud Database instances.
@@ -182,20 +188,29 @@ class CloudDatabaseUserManager(BaseManager):
     Database instance.
     """
 <<<<<<< HEAD
+<<<<<<< HEAD
     def _create_body(self, name, password, databases=None, database_names=None):
 =======
     def _create_body(self, name, password, databases=None, database_names=None,
             host=None):
 >>>>>>> upstream/master
+=======
+    def _create_body(self, name, password, databases=None, database_names=None,
+            host=None):
+>>>>>>> upstream/working
         db_dicts = [{"name": db} for db in database_names]
         body = {"users": [
                 {"name": name,
                 "password": password,
                 "databases": db_dicts,
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
                 "host": host,
 >>>>>>> upstream/master
+=======
+                "host": host,
+>>>>>>> upstream/working
                 }]}
         return body
 
@@ -878,7 +893,10 @@ class CloudDatabaseClient(BaseClient):
                 if link["rel"] == "self"][0]
         return href
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> upstream/working
 
 
     def list_backups(self, instance=None):
@@ -919,4 +937,7 @@ class CloudDatabaseClient(BaseClient):
         instance, as well as a flavor and size (in GB) for the instance.
         """
         return self._manager.restore_backup(backup, name, flavor, volume)
+<<<<<<< HEAD
 >>>>>>> upstream/master
+=======
+>>>>>>> upstream/working
