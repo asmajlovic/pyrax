@@ -1102,6 +1102,7 @@ class Node(object):
                 "port": self.port,
                 "condition": self.condition,
                 "type": self.type,
+                "id": self.id,
                 }
 
 
